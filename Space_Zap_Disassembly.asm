@@ -1,6 +1,20 @@
 ;*****************************
 ; Space Zap
 ;*****************************
+;
+; Sprite object record
+; --------------------
+;   +0  Horizontal hotspot offset
+;   +1  Vertical hotspot offset
+;   +2  Bitmap width in bytes
+;   +3  Bitmap height in rows
+;   +4  Packed 2bpp bitmap data
+;
+; Each bitmap byte stores four pixels, most-significant pair first. The shared
+; object draw path advances past the two hotspot bytes before reading the
+; width/height header.
+; Inline pixels use "." for value 0 and "1" through "3" for the color index.
+;
 	 .ORG 0000H
 
 	 nop
@@ -934,6 +948,23 @@
 	 pop  af
 	 ei
 	 ret
+;*******************************************************************************
+; MAGIC_DRAW_BITMAP
+;
+; Configures and starts a Magic/DNA bitmap transfer.
+;
+; Input:
+;   B  XPAND value
+;   C  Magic control and transform flags
+;   D  Bitmap height in rows
+;   E  Bitmap width in bytes
+;   HL Destination address
+;   IX Source bitmap address
+;
+; Bit 2 is cleared before the Magic register write. Bits 6 and 7 select the
+; horizontal and vertical hardware transforms used by Space Zap.
+;*******************************************************************************
+MAGIC_DRAW_BITMAP:
 	 ld   a,b
 	 out  ($19),a
 	 ld   a,c
@@ -997,11 +1028,18 @@
 	 dec  a
 	 out  ($7E),a
 	 ret
+;*******************************************************************************
+; DRAW_SPRITE_FROM_HEADER
+;
+; Reads the width and height at IX, advances IX to the packed bitmap, and enters
+; MAGIC_DRAW_BITMAP. Object-record callers pass object address + 2.
+;*******************************************************************************
+DRAW_SPRITE_FROM_HEADER:
 	 ld   e,(ix+$00)
 	 inc  ix
 	 ld   d,(ix+$00)
 	 inc  ix
-	 jp   $069E
+	 jp   MAGIC_DRAW_BITMAP
 	 sla  l
 	 rl   h
 	 sla  l
@@ -1041,6 +1079,9 @@
 	 or   e
 	 ld   c,a
 	 ret
+; Draw the object referenced by the active actor state and preserve its render
+; parameters for the corresponding erase/redraw operation.
+DRAW_ACTIVE_OBJECT:
 	 ld   b,(iy+$1b)
 	 ld   (iy+$23),b
 	 ld   c,(iy+$1a)
@@ -1057,7 +1098,10 @@
 	 ld   l,(iy+$38)
 	 ld   (iy+$3b),h
 	 ld   (iy+$3a),l
-	 jp   $0712
+	 jp   DRAW_SPRITE_FROM_HEADER
+
+; Redraw the object using the render parameters saved by DRAW_ACTIVE_OBJECT.
+REDRAW_SAVED_OBJECT:
 	 ld   b,(iy+$23)
 	 ld   c,(iy+$22)
 	 ld   h,(iy+$37)
@@ -1068,13 +1112,13 @@
 	 pop  ix
 	 ld   h,(iy+$3b)
 	 ld   l,(iy+$3a)
-	 jp   $0712
+	 jp   DRAW_SPRITE_FROM_HEADER
 	 bit  3,(iy+$24)
 	 jp   nz,$07B1
 	 ld   a,(iy+$37)
 	 or   (iy+$36)
 	 jp   z,$07AE
-	 call $0781
+	 call REDRAW_SAVED_OBJECT
 	 jp   $07B5
 	 res  3,(iy+$24)
 	 bit  1,(iy+$24)
@@ -1844,7 +1888,7 @@
 	 ld   a,b
 	 and  $C0
 	 jp   nz,$0DAC
-	 call $069E
+	 call MAGIC_DRAW_BITMAP
 	 ld   e,$01
 	 ret
 	 ld   a,c
@@ -3274,1763 +3318,793 @@
 	 xor  a
 	 jp   nz,$1695
 	 jp   (iy)
-	 djnz $16B4
-	 dec  b
-	 ld   a,(bc)
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 dec  b
-	 ld   b,b
-	 nop
-	 nop
-	 nop
-	 inc  h
-	 ld   a,b
-	 nop
-	 nop
-	 nop
-	 dec  d
-	 ld   e,b
-	 nop
-	 nop
-	 nop
-	 daa
-	 ret  pe
-	 nop
-	 nop
-	 nop
-	 ld   h,h
-	 sub  b
-	 nop
-	 nop
-	 nop
-	 ld   b,(hl)
-	 jr   $16D9
-	 nop
-	 nop
-	 ex   af,af'
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 djnz $16EA
-	 dec  b
-	 ld   a,(bc)
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 add  a,c
-	 inc  c
-	 nop
-	 nop
-	 nop
-	 ld   b,c
-	 djnz $16D6
-	 nop
-	 nop
-	 nop
-	 nop
-	 jr   $16FC
-	 rrca
-	 ld   (hl),b
-	 ld   hl,$00F8
-	 nop
-	 ld   c,$10
-	 inc  sp
-	 nop
-	 ld   bc,$0CF3
-	 rst  $00
-	 nop
-	 inc  c
-	 ld   b,e
-	 inc  e
-	 ret  p
-	 nop
-	 jr   nc,$1694
-	 ld   c,$30
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 djnz $1720
-	 dec  b
-	 ld   a,(bc)
-	 nop
-	 add  a,b
-	 ld   (bc),a
-	 nop
-	 nop
-	 nop
-	 ld   bc,$0200
-	 nop
-	 nop
-	 ld   b,b
-	 djnz $173C
-	 nop
-	 nop
-	 inc  b
-	 inc  b
-	 nop
-	 nop
-	 sub  b
-	 ld   (bc),a
-	 ld   bc,$0820
-	 nop
-	 ld   b,b
-	 djnz $175F
-	 nop
-	 ld   bc,$0810
-	 ld   bc,$2000
-	 inc  b
-	 ex   af,af'
-	 ex   af,af'
-	 nop
-	 ex   af,af'
-	 ld   (bc),a
-	 nop
-	 inc  b
-	 nop
-	 inc  b
-	 ld   (bc),a
-	 nop
-	 nop
-	 djnz $1761
-	 inc  b
-	 dec  b
-	 ld   a,(bc)
-	 nop
-	 ld   (bc),a
-	 nop
-	 nop
-	 ex   af,af'
-	 ld   (bc),a
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 inc  b
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 ex   af,af'
-	 nop
-	 nop
-	 ld   bc,$0000
-	 inc  b
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   b,b
-	 ld   bc,$0000
-	 djnz $177F
-	 nop
-	 nop
-	 add  a,b
-	 nop
-	 nop
-	 add  a,b
-	 nop
-	 nop
-	 nop
-	 ld   bc,$0001
-	 add  hl,bc
-	 xor  (hl)
-	 ld   d,$08
-	 call po,$0616
-	 ld   a,(de)
-	 rla
-	 ld   b,$50
-	 rla
-	 rst  $38
-	 add  a,(hl)
-	 rla
-	 nop
-	 adc  a,e
-	 rla
-	 ex   af,af'
-	 ld   b,$02
-	 inc  c
-	 ld   b,b
-	 nop
-	 jr   nc,$17A5
-	 ld   a,(de)
-	 nop
-	 ld   c,$00
-	 ld   a,($FE00)
-	 nop
-	 cp   $00
-	 ld   a,($0E00)
-	 nop
-	 ld   a,(de)
-	 nop
-	 jr   nc,$17B7
-	 ld   b,b
-	 nop
-	 rlca
-	 ex   af,af'
-	 inc  bc
-	 rlca
-	 inc  bc
-	 nop
-	 nop
-	 add  a,e
-	 inc  b
-	 nop
-	 ld   c,a
-	 ret  z
-	 nop
-	 ld   l,a
-	 ret  c
-	 nop
-	 ccf
-	 ret  p
-	 nop
-	 rla
-	 and  b
-	 nop
-	 ccf
-	 ret  p
-	 nop
+;*******************************************************************************
+; ALIEN_SHIP_DESTROY_1
+;
+; Alien ship destruction animation, frame 1.
+; Object record: $16AE; bitmap header: $16B0.
+; Hotspot offsets: X = 16, Y = 4.
+; Bitmap: 20 x 10 pixels, 5 bytes per row.
+;*******************************************************************************
+ALIEN_SHIP_DESTROY_1:
+        .DB      $10,$04 ; Hotspot offsets: X = 16, Y = 4
+ALIEN_SHIP_DESTROY_1_HEADER:
+        .DB      $05,$0A ; Bitmap size: 5 bytes/row, 10 rows
+        .DB      $00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$05,$40,$00,$00 ; . . . . . . 1 1 1 . . . . . . . . . . .
+        .DB      $00,$24,$78,$00,$00 ; . . . . . 2 1 . 1 3 2 . . . . . . . . .
+        .DB      $00,$15,$58,$00,$00 ; . . . . . 1 1 1 1 1 2 . . . . . . . . .
+        .DB      $00,$27,$E8,$00,$00 ; . . . . . 2 1 3 3 2 2 . . . . . . . . .
+        .DB      $00,$64,$90,$00,$00 ; . . . . 1 2 1 . 2 1 . . . . . . . . . .
+        .DB      $00,$46,$18,$00,$00 ; . . . . 1 . 1 2 . 1 2 . . . . . . . . .
+        .DB      $00,$08,$00,$00,$00 ; . . . . . . 2 . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . .
+;*******************************************************************************
+; ALIEN_SHIP_DESTROY_2
+;
+; Alien ship destruction animation, frame 2.
+; Object record: $16E4; bitmap header: $16E6.
+; Hotspot offsets: X = 16, Y = 4.
+; Bitmap: 20 x 10 pixels, 5 bytes per row.
+;*******************************************************************************
+ALIEN_SHIP_DESTROY_2:
+        .DB      $10,$04 ; Hotspot offsets: X = 16, Y = 4
+ALIEN_SHIP_DESTROY_2_HEADER:
+        .DB      $05,$0A ; Bitmap size: 5 bytes/row, 10 rows
+        .DB      $00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$81,$0C,$00,$00 ; . . . . 2 . . 1 . . 3 . . . . . . . . .
+        .DB      $00,$41,$10,$E0,$00 ; . . . . 1 . . 1 . 1 . . 3 2 . . . . . .
+        .DB      $00,$00,$00,$18,$00 ; . . . . . . . . . . . . . 1 2 . . . . .
+        .DB      $0F,$70,$21,$F8,$00 ; . . 3 3 1 3 . . . 2 . 1 3 3 2 . . . . .
+        .DB      $00,$0E,$10,$33,$00 ; . . . . . . 3 2 . 1 . . . 3 . 3 . . . .
+        .DB      $01,$F3,$0C,$C7,$00 ; . . . 1 3 3 . 3 . . 3 . 3 . 1 3 . . . .
+        .DB      $0C,$43,$1C,$F0,$00 ; . . 3 . 1 . . 3 . 1 3 . 3 3 . . . . . .
+        .DB      $30,$82,$0E,$30,$00 ; . 3 . . 2 . . 2 . . 3 2 . 3 . . . . . .
+        .DB      $00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . .
+;*******************************************************************************
+; ALIEN_SHIP_DESTROY_3
+;
+; Alien ship destruction animation, frame 3.
+; Object record: $171A; bitmap header: $171C.
+; Hotspot offsets: X = 16, Y = 4.
+; Bitmap: 20 x 10 pixels, 5 bytes per row.
+;*******************************************************************************
+ALIEN_SHIP_DESTROY_3:
+        .DB      $10,$04 ; Hotspot offsets: X = 16, Y = 4
+ALIEN_SHIP_DESTROY_3_HEADER:
+        .DB      $05,$0A ; Bitmap size: 5 bytes/row, 10 rows
+        .DB      $00,$80,$02,$00,$00 ; . . . . 2 . . . . . . 2 . . . . . . . .
+        .DB      $00,$01,$00,$02,$00 ; . . . . . . . 1 . . . . . . . 2 . . . .
+        .DB      $00,$40,$10,$10,$00 ; . . . . 1 . . . . 1 . . . 1 . . . . . .
+        .DB      $00,$04,$04,$00,$00 ; . . . . . . 1 . . . 1 . . . . . . . . .
+        .DB      $90,$02,$01,$20,$08 ; 2 1 . . . . . 2 . . . 1 . 2 . . . . 2 .
+        .DB      $00,$40,$10,$24,$00 ; . . . . 1 . . . . 1 . . . 2 1 . . . . .
+        .DB      $01,$10,$08,$01,$00 ; . . . 1 . 1 . . . . 2 . . . . 1 . . . .
+        .DB      $20,$04,$08,$08,$00 ; . 2 . . . . 1 . . . 2 . . . 2 . . . . .
+        .DB      $08,$02,$00,$04,$00 ; . . 2 . . . . 2 . . . . . . 1 . . . . .
+        .DB      $04,$02,$00,$00,$10 ; . . 1 . . . . 2 . . . . . . . . . 1 . .
+ 
+;*******************************************************************************
+; ALIEN_SHIP_DESTROY_4
+;
+; Alien ship destruction animation, frame 4.
+; Object record: $1750; bitmap header: $1752.
+; Hotspot offsets: X = 16, Y = 4.
+; Bitmap: 20 x 10 pixels, 5 bytes per row.
+;*******************************************************************************
+ALIEN_SHIP_DESTROY_4:
+        .DB      $10,$04 ; Hotspot offsets: X = 16, Y = 4
+ALIEN_SHIP_DESTROY_4_HEADER:
+        .DB      $05,$0A ; Bitmap size: 5 bytes/row, 10 rows
+        .DB      $00,$02,$00,$00,$08 ; . . . . . . . 2 . . . . . . . . . . 2 .
+        .DB      $02,$00,$00,$00,$00 ; . . . 2 . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$04,$00,$00 ; . . . . . . . . . . 1 . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . .
+        .DB      $08,$00,$00,$01,$00 ; . . 2 . . . . . . . . . . . . 1 . . . .
+        .DB      $00,$04,$00,$00,$00 ; . . . . . . 1 . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$40,$01,$00 ; . . . . . . . . 1 . . . . . . 1 . . . .
+        .DB      $00,$10,$00,$00,$00 ; . . . . . 1 . . . . . . . . . . . . . .
+        .DB      $80,$00,$00,$80,$00 ; 2 . . . . . . . . . . . 2 . . . . . . .
+;*******************************************************************************
+; BLANK
+;
+; Blank replacement object used to remove an animated frame.
+; Object record: $1786; bitmap header: $1788.
+; Hotspot offsets: X = 0, Y = 0.
+; Bitmap: 4 x 1 pixels, 1 byte per row.
+;*******************************************************************************
+BLANK:
+        .DB      $00,$00 ; Hotspot offsets: X = 0, Y = 0
+BLANK_HEADER:
+        .DB      $01,$01 ; Bitmap size: 1 byte/row, 1 row
+        .DB      $00 ; . . . .
+; Alien ship destruction-frame sequence. Each entry is a control byte
+; followed by a pointer to a complete sprite object record.
+ALIEN_SHIP_DESTROY_SEQUENCE:
+        .DB      $09
+        .DW      ALIEN_SHIP_DESTROY_1
+        .DB      $08
+        .DW      ALIEN_SHIP_DESTROY_2
+        .DB      $06
+        .DW      ALIEN_SHIP_DESTROY_3
+        .DB      $06
+        .DW      ALIEN_SHIP_DESTROY_4
+        .DB      $FF
+        .DW      BLANK
+        .DB      $00
+        .DW      ALIEN_SHIP_DESTROY_SEQUENCE
+;*******************************************************************************
+; ALIEN_SHIP_VERTICAL
+;
+; Alien ship oriented for vertical approaches.
+; Object record: $179D; bitmap header: $179F.
+; Hotspot offsets: X = 8, Y = 6.
+; Bitmap: 8 x 12 pixels, 2 bytes per row.
+;*******************************************************************************
+ALIEN_SHIP_VERTICAL:
+        .DB      $08,$06 ; Hotspot offsets: X = 8, Y = 6
+ALIEN_SHIP_VERTICAL_HEADER:
+        .DB      $02,$0C ; Bitmap size: 2 bytes/row, 12 rows
+        .DB      $40,$00 ; 1 . . . . . . .
+        .DB      $30,$00 ; . 3 . . . . . .
+        .DB      $1A,$00 ; . 1 2 2 . . . .
+        .DB      $0E,$00 ; . . 3 2 . . . .
+        .DB      $3A,$00 ; . 3 2 2 . . . .
+        .DB      $FE,$00 ; 3 3 3 2 . . . .
+        .DB      $FE,$00 ; 3 3 3 2 . . . .
+        .DB      $3A,$00 ; . 3 2 2 . . . .
+        .DB      $0E,$00 ; . . 3 2 . . . .
+        .DB      $1A,$00 ; . 1 2 2 . . . .
+        .DB      $30,$00 ; . 3 . . . . . .
+        .DB      $40,$00 ; 1 . . . . . . .
+;*******************************************************************************
+; ALIEN_SHIP_HORIZONTAL
+;
+; Alien ship oriented for horizontal approaches.
+; Object record: $17B9; bitmap header: $17BB.
+; Hotspot offsets: X = 7, Y = 8.
+; Bitmap: 12 x 7 pixels, 3 bytes per row.
+;*******************************************************************************
+ALIEN_SHIP_HORIZONTAL:
+        .DB      $07,$08 ; Hotspot offsets: X = 7, Y = 8
+ALIEN_SHIP_HORIZONTAL_HEADER:
+        .DB      $03,$07 ; Bitmap size: 3 bytes/row, 7 rows
+        .DB      $03,$00,$00 ; . . . 3 . . . . . . . .
+        .DB      $83,$04,$00 ; 2 . . 3 . . 1 . . . . .
+        .DB      $4F,$C8,$00 ; 1 . 3 3 3 . 2 . . . . .
+        .DB      $6F,$D8,$00 ; 1 2 3 3 3 1 2 . . . . .
+        .DB      $3F,$F0,$00 ; . 3 3 3 3 3 . . . . . .
+        .DB      $17,$A0,$00 ; . 1 1 3 2 2 . . . . . .
+        .DB      $3F,$F0,$00 ; . 3 3 3 3 3 . . . . . .
 	 nop
 	 ld   bc,$021D
 	 rst  $38
 	 ld   bc,$0100
 	 jr   c,$17CC
-	 nop
-	 nop
-	 ld   b,$15
-	 ld   d,l
-	 ld   d,l
-	 ld   d,l
-	 ld   e,d
-	 ld   b,b
-	 nop
-	 ld   e,a
-	 db   $fd,$ff
-	 ld   e,d
-	 ld   b,b
-	 nop
-	 ld   (hl),a
-	 rst  $38
-	 ld   a,a
-	 jp   c,$0040
-	 ld   a,l
-	 rst  $38
-	 rst  $18
-	 jp   c,$0040
-	 ld   a,a
-	 ld   a,a
-	 rst  $38
-	 jp   c,$0040
-	 ld   a,a
-	 rst  $18
-	 rst  $38
-	 jp   c,$0040
-	 ld   a,a
-	 rst  $38
-	 rst  $38
-	 jp   c,$0040
-	 ld   a,a
-	 rst  $38
-	 rst  $38
-	 jp   c,$0040
-	 ld   a,a
-	 rst  $38
-	 rst  $38
-	 jp   c,$0050
-	 ld   a,a
-	 rst  $38
-	 rst  $38
-	 jp   c,$0094
-	 ld   a,a
-	 rst  $38
-	 rst  $38
-	 sub  $A5
-	 nop
-	 ld   a,a
-	 rst  $38
-	 rst  $38
-	 ld   d,l
-	 xor  c
-	 ld   b,b
-	 ld   d,a
-	 rst  $38
-	 db   $fd,$d5
-	 ld   l,d
-	 ld   b,b
-	 ld   d,l
-	 ld   d,l
-	 ld   d,l
-	 ld   (hl),l
-	 ld   e,d
-	 ld   b,b
-	 xor  d
-	 xor  d
-	 and  l
-	 ld   e,l
-	 ld   e,d
-	 ld   b,b
-	 xor  d
-	 xor  d
-	 xor  c
-	 ld   d,a
-	 ld   e,d
-	 ld   b,b
-	 ld   d,l
-	 ld   d,l
-	 ld   l,d
-	 ld   d,l
-	 jp   c,$0040
-	 nop
-	 ld   e,d
-	 sub  l
-	 ld   e,d
-	 ld   b,b
-	 nop
-	 nop
-	 ld   d,$AA
-	 xor  d
-	 ld   b,b
-	 nop
-	 nop
-	 dec  b
-	 xor  d
-	 xor  d
-	 ld   b,b
-	 nop
-	 nop
-	 ld   bc,$5555
-	 ld   b,b
-	 nop
-	 nop
-	 ld   b,$15
-	 nop
-	 nop
-	 nop
-	 ex   af,af'
-	 ret  nc
-	 nop
-	 nop
-	 nop
-	 nop
-	 inc  b
-	 jr   nz,$182E
-	 nop
-	 nop
-	 nop
-	 ld   b,e
-	 jr   nz,$1874
-	 nop
-	 nop
-	 nop
-	 inc  b
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 inc  hl
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 jr   nz,$1845
-	 nop
-	 nop
-	 nop
-	 ex   af,af'
-	 inc  c
-	 ret  p
-	 nop
-	 nop
-	 ex   af,af'
-	 inc  c
-	 jr   nc,$18D1
-	 ld   b,b
-	 nop
-	 nop
-	 dec  c
-	 inc  hl
-	 ld   bc,$0000
-	 nop
-	 nop
-	 jp   nz,$0001
-	 nop
-	 nop
-	 inc  c
-	 jr   nz,$18E3
-	 ld   b,b
-	 nop
-	 inc  c
-	 jr   nz,$18F8
-	 db   $fd,$00
-	 nop
-	 nop
-	 ld   bc,$6310
-	 ld   b,b
-	 nop
-	 or   d
-	 sbc  a,h
-	 adc  a,d
-	 adc  a,d
-	 nop
-	 nop
-	 ret  po
-	 ld   d,b
-	 jr   nz,$18DB
-	 nop
-	 inc  hl
-	 ret  z
-	 ld   a,h
-	 jr   nz,$18C1
-	 nop
-	 ld   h,a
-	 sll  b
-	 inc  c
-	 nop
-	 nop
-	 ld   sp,$5001
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   b,b
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 rlca
-	 add  hl,bc
-	 dec  b
-	 inc  de
-	 nop
-	 rrca
-	 nop
-	 nop
-	 nop
-	 nop
-	 ccf
-	 ret  nz
-	 nop
-	 nop
-	 nop
-	 jr   nc,$18B1
-	 nop
-	 nop
-	 nop
-	 ccf
-	 ret  nz
-	 nop
-	 nop
-	 nop
-	 rrca
-	 nop
-	 nop
-	 nop
-	 ld   (bc),a
-	 rrca
-	 ex   af,af'
-	 nop
-	 nop
-	 ld   a,(bc)
-	 rrca
-	 ld   a,(bc)
-	 nop
-	 nop
-	 ld   a,(bc)
-	 rrca
-	 ld   a,(bc)
-	 nop
-	 nop
-	 dec  hl
-	 rst  $38
-	 cp   $80
-	 nop
-	 cpl
-	 rst  $38
-	 rst  $38
-	 add  a,b
-	 nop
-	 xor  a
-	 rst  $38
-	 rst  $38
-	 and  b
-	 nop
-	 cp   a
-	 push af
-	 rst  $38
-	 ret  po
-	 nop
-	 or   a
-	 push af
-	 db   $fd,$e0
-	 nop
-	 cp   e
-	 push af
-	 ld   iyh,b
-	 nop
-	 add  a,l
-	 push af
-	 push af
-	 jr   nz,$192F
-	 add  a,l
-	 ld   d,l
-	 ld   d,l
-	 jr   nz,$1934
-	 add  a,c
-	 ld   d,l
-	 ld   d,h
-	 jr   nz,$1939
-	 add  a,b
-	 dec  d
-	 ld   b,b
-	 jr   nz,$193E
-	 nop
-	 dec  b
-	 nop
-	 nop
-	 nop
-	 rlca
-	 inc  b
-	 dec  b
-	 djnz $1948
-	 rrca
-	 nop
-	 nop
-	 nop
-	 nop
-	 ccf
-	 ret  nz
-	 nop
-	 nop
-	 ld   (bc),a
-	 jr   nc,$191C
-	 nop
-	 nop
-	 ld   a,(bc)
-	 ccf
-	 jp   z,$0000
-	 ld   a,(bc)
-	 rrca
-	 ld   a,(bc)
-	 nop
-	 nop
-	 dec  hl
-	 rst  $38
-	 cp   $80
-	 nop
-	 cpl
-	 rst  $38
-	 rst  $38
-	 add  a,b
-	 nop
-	 xor  a
-	 rst  $38
-	 rst  $38
-	 and  b
-	 nop
-	 cp   a
-	 push af
-	 rst  $38
-	 ret  po
-	 nop
-	 or   a
-	 push af
-	 db   $fd,$e0
-	 nop
-	 cp   e
-	 push af
-	 ld   iyh,b
-	 nop
-	 add  a,l
-	 push af
-	 push af
-	 jr   nz,$1983
-	 add  a,l
-	 ld   d,l
-	 ld   d,l
-	 jr   nz,$1988
-	 add  a,c
-	 ld   d,l
-	 ld   d,h
-	 jr   nz,$198D
-	 add  a,b
-	 dec  d
-	 ld   b,b
-	 jr   nz,$1992
-	 nop
-	 dec  b
-	 nop
-	 nop
-	 nop
-	 rlca
-	 rlca
-	 dec  b
-	 ld   c,$00
-	 nop
-	 ld   a,(bc)
-	 xor  b
-	 nop
-	 nop
-	 nop
-	 xor  e
-	 ret  nz
-	 nop
-	 nop
-	 ld   a,(bc)
-	 ccf
-	 ld   d,b
-	 nop
-	 nop
-	 ld   hl,($D0FF)
-	 nop
-	 nop
-	 nop
-	 rst  $38
-	 call nc,$3F00
-	 nop
-	 rst  $38
-	 call nc,$F300
-	 rst  $38
-	 ld   d,iyl
-	 nop
-	 di
-	 rst  $38
-	 ld   d,iyl
-	 nop
-	 ccf
-	 nop
-	 rst  $38
-	 call nc,$0000
-	 nop
-	 rst  $38
-	 call nc,$0000
-	 ld   hl,($D0FF)
-	 nop
-	 nop
-	 ld   a,(bc)
-	 ccf
-	 ld   d,b
-	 nop
-	 nop
-	 nop
-	 xor  e
-	 ret  nz
-	 nop
-	 nop
-	 nop
-	 ld   a,(bc)
-	 xor  b
-	 nop
-	 dec  b
-	 rlca
-	 dec  b
-	 ld   c,$00
-	 nop
-	 ld   a,(bc)
-	 xor  b
-	 nop
-	 nop
-	 nop
-	 xor  e
-	 ret  nz
-	 nop
-	 nop
-	 ld   a,(bc)
-	 ccf
-	 ld   d,b
-	 nop
-	 nop
-	 ld   hl,($D0FF)
-	 nop
-	 nop
-	 nop
-	 rst  $38
-	 call nc,$0000
-	 call m,$D4FF
-	 nop
-	 inc  bc
-	 rst  $08
-	 ld   d,iyl
-	 nop
-	 inc  bc
-	 rst  $08
-	 ld   d,iyl
-	 nop
-	 nop
-	 call m,$D4FF
-	 nop
-	 nop
-	 nop
-	 rst  $38
-	 call nc,$0000
-	 ld   hl,($D0FF)
-	 nop
-	 nop
-	 ld   a,(bc)
-	 ccf
-	 ld   d,b
-	 nop
-	 nop
-	 nop
-	 xor  e
-	 ret  nz
-	 nop
-	 nop
-	 nop
-	 ld   a,(bc)
-	 xor  b
-	 nop
-	 rst  $38
-	 ret  po
-	 jr   $1A2F
-	 dec  hl
-	 ld   a,(de)
-	 rst  $38
-	 sub  a
-	 add  hl,de
-	 nop
-	 ld   sp,$0E1A
-	 ld   b,e
-	 add  hl,de
-	 rst  $38
-	 ret  po
-	 jr   $1A3E
-	 scf
-	 ld   a,(de)
-	 ld   c,$E1
-	 add  hl,de
-	 rst  $38
-	 sub  a
-	 add  hl,de
-	 nop
-	 ld   b,b
-	 ld   a,(de)
-	 ld   (bc),a
-	 ld   (bc),a
-	 ld   (bc),a
-	 inc  b
-	 inc  d
-	 nop
-	 db   $dd,$00
-	 ld   (hl),a
-	 nop
-	 inc  e
-	 nop
-	 inc  bc
-	 inc  bc
-	 inc  bc
-	 ld   b,$07
-	 nop
-	 nop
-	 scf
-	 ret  nz
-	 nop
-	 push de
-	 ld   d,b
-	 nop
-	 ld   (hl),a
-	 ret  nc
-	 nop
-	 dec  a
-	 ld   b,b
-	 nop
-	 dec  c
-	 nop
-	 nop
-	 inc  b
-	 inc  b
-	 inc  bc
-	 ex   af,af'
-	 inc  bc
-	 ret  nz
-	 nop
-	 rrca
-	 ld   d,b
-	 nop
-	 dec  a
-	 ld   (hl),h
-	 nop
-	 db   $dd,$dd
-	 nop
-	 ld   (hl),a
-	 ld   (hl),a
-	 nop
-	 rla
-	 call nc,$0D00
-	 ld   d,b
-	 nop
-	 ld   bc,$0040
-	 inc  b
-	 dec  b
-	 inc  b
-	 add  hl,bc
-	 ld   bc,$0070
-	 nop
-	 dec  b
-	 call m,$0000
-	 dec  (hl)
-	 ld   (hl),l
-	 nop
-	 nop
-	 dec  a
-	 ld   d,l
-	 nop
-	 nop
-	 rst  $18
-	 ld   e,l
-	 ld   b,b
-	 nop
-	 ld   d,l
-	 ld   e,a
-	 ret  nz
-	 nop
-	 dec  (hl)
-	 ld   a,l
-	 nop
-	 nop
-	 rlca
-	 ld   (hl),h
-	 nop
-	 nop
-	 inc  bc
-	 ret  nc
-	 nop
-	 nop
-	 dec  b
-	 ld   b,$04
-	 dec  bc
-	 nop
-	 call nc,$0000
-	 rrca
-	 ld   d,a
-	 ret  nz
-	 nop
-	 ccf
-	 push af
-	 ret  nc
-	 nop
-	 dec  a
-	 db   $fd,$50
-	 nop
-	 dec  (hl)
-	 ld   (hl),l
-	 ld   (hl),b
-	 nop
-	 rst  $10
-	 ld   d,l
-	 call m,$5500
-	 ld   e,l
-	 call p,$1D00
-	 rst  $18
-	 ret  p
-	 nop
-	 ccf
-	 ld   d,a
-	 ret  p
-	 nop
-	 dec  b
-	 ld   e,a
-	 ld   b,b
-	 nop
-	 nop
-	 ld   e,h
-	 nop
-	 nop
-	 inc  e
-	 ld   c,c
-	 ld   a,(de)
-	 inc  d
-	 ld   d,l
-	 ld   a,(de)
-	 djnz $1B52
-	 ld   a,(de)
-	 inc  c
-	 add  a,a
-	 ld   a,(de)
-	 rst  $38
-	 xor  a
-	 ld   a,(de)
-	 nop
-	 rst  $18
-	 ld   a,(de)
-	 add  hl,bc
-	 ld   c,c
-	 ld   a,(de)
-	 add  hl,bc
-	 ld   d,l
-	 ld   a,(de)
-	 add  hl,bc
-	 ld   l,e
-	 ld   a,(de)
-	 add  hl,bc
-	 add  a,a
-	 ld   a,(de)
-	 rst  $38
-	 xor  a
-	 ld   a,(de)
-	 nop
-	 rst  $18
-	 ld   a,(de)
-	 ex   af,af'
-	 ld   b,$04
-	 inc  c
-	 nop
-	 ret  nz
-	 inc  b
-	 nop
-	 ret  nz
-	 di
-	 nop
-	 nop
-	 ccf
-	 rst  $38
-	 inc  c
-	 nop
-	 rrca
-	 rst  $38
-	 call m,$0F00
-	 rst  $18
-	 ld   a,a
-	 nop
-	 rst  $38
-	 ld   d,l
-	 ld   a,h
-	 nop
-	 ld   d,iyl
-	 ld   a,h
-	 nop
-	 ccf
-	 push af
-	 ld   a,h
-	 nop
-	 rrca
-	 ccf
-	 ret  p
-	 nop
-	 ld   c,h
-	 rrca
-	 pop  bc
-	 nop
-	 nop
-	 rrca
-	 ret  nz
-	 nop
-	 nop
-	 inc  bc
-	 nop
-	 nop
-	 ld   a,(bc)
-	 ex   af,af'
-	 dec  b
-	 ld   de,$0001
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   b,b
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   d,h
-	 nop
-	 nop
-	 nop
-	 nop
-	 inc  d
-	 inc  b
-	 nop
-	 nop
-	 nop
-	 dec  d
-	 ld   d,h
-	 nop
-	 ret  nz
-	 nop
-	 dec  e
-	 ld   d,h
-	 inc  d
-	 nop
-	 nop
-	 ld   e,a
-	 push de
-	 ld   d,l
-	 nop
-	 nop
-	 ld   e,a
-	 rst  $38
-	 push af
-	 nop
-	 pop  bc
-	 ld   a,a
-	 rst  $38
-	 call p,$1500
-	 ld   a,a
-	 rst  $38
-	 call nc,$1500
-	 rst  $38
-	 rst  $38
-	 call nc,$0500
-	 rst  $38
-	 rst  $38
-	 push af
-	 nop
-	 dec  b
-	 push af
-	 db   $fd,$f4
-	 nop
-	 nop
-	 ld   d,l
-	 ld   d,l
-	 ld   d,h
-	 nop
-	 dec  b
-	 inc  d
-	 inc  d
-	 ld   b,l
-	 ld   b,b
-	 inc  b
-	 nop
-	 nop
-	 ld   b,b
-	 ld   b,b
-	 ld   d,b
-	 nop
-	 nop
-	 ld   b,b
-	 nop
-	 inc  c
-	 dec  bc
-	 ld   b,$17
-	 nop
-	 nop
-	 add  a,b
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   (bc),a
-	 ld   h,b
-	 nop
-	 nop
-	 nop
-	 nop
-	 xor  c
-	 ld   e,b
-	 nop
-	 nop
-	 nop
-	 ld   (bc),a
-	 ld   d,l
-	 ld   d,(hl)
-	 ld   a,(bc)
-	 nop
-	 nop
-	 dec  bc
-	 rst  $18
-	 push af
-	 and  (hl)
-	 add  a,b
-	 nop
-	 dec  h
-	 rst  $38
-	 ld   a,iyl
-	 ld   h,b
-	 nop
-	 add  hl,bc
-	 ld   a,a
-	 rst  $38
-	 db   $fd,$58
-	 nop
-	 ld   (bc),a
-	 rst  $38
-	 rst  $38
-	 rst  $38
-	 ld   d,(hl)
-	 nop
-	 nop
-	 cp   a
-	 rst  $38
-	 rst  $38
-	 push de
-	 add  a,b
-	 ld   (bc),a
-	 ld   e,a
-	 rst  $38
-	 rst  $38
-	 ld   iyh,b
-	 add  hl,bc
-	 ld   a,a
-	 rst  $38
-	 rst  $38
-	 push af
-	 add  a,b
-	 dec  h
-	 rst  $38
-	 rst  $38
-	 rst  $38
-	 sub  $00
-	 and  l
-	 rst  $38
-	 rst  $38
-	 rst  $38
-	 ld   e,b
-	 nop
-	 dec  h
-	 ld   e,a
-	 rst  $38
-	 push af
-	 ld   e,b
-	 nop
-	 add  hl,bc
-	 rst  $38
-	 rst  $38
-	 db   $fd,$a0
-	 nop
-	 ld   (bc),a
-	 ei
-	 rst  $38
-	 cp   $00
-	 nop
-	 nop
-	 db   $ed,$ff
-	 cp   $00
-	 nop
-	 nop
-	 sbc  a,a
-	 rst  $38
-	 cp   $A0
-	 nop
-	 ld   (bc),a
-	 ld   d,a
-	 rst  $18
-	 db   $fd,$58
-	 nop
-	 nop
-	 sub  l
-	 ld   e,e
-	 ld   (hl),l
-	 ld   h,b
-	 nop
-	 nop
-	 dec  h
-	 ld   h,d
-	 ld   d,l
-	 add  a,b
-	 nop
-	 nop
-	 add  hl,bc
-	 add  a,b
-	 sub  (hl)
-	 nop
-	 nop
-	 nop
-	 ld   (bc),a
-	 nop
-	 jr   z,$1C1D
-	 nop
+;*******************************************************************************
+; LASER_BASE_BODY
+;
+; Intact center laser-base body.
+; Object record: $17DC; bitmap header: $17DE.
+; Hotspot offsets: X = 0, Y = 0.
+; Bitmap: 24 x 21 pixels, 6 bytes per row.
+;*******************************************************************************
+LASER_BASE_BODY:
+        .DB      $00,$00 ; Hotspot offsets: X = 0, Y = 0
+LASER_BASE_BODY_HEADER:
+        .DB      $06,$15 ; Bitmap size: 6 bytes/row, 21 rows
+        .DB      $55,$55,$55,$5A,$40,$00 ; 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2 1 . . . . . . .
+        .DB      $5F,$FD,$FF,$5A,$40,$00 ; 1 1 3 3 3 3 3 1 3 3 3 3 1 1 2 2 1 . . . . . . .
+        .DB      $77,$FF,$7F,$DA,$40,$00 ; 1 3 1 3 3 3 3 3 1 3 3 3 3 1 2 2 1 . . . . . . .
+        .DB      $7D,$FF,$DF,$DA,$40,$00 ; 1 3 3 1 3 3 3 3 3 1 3 3 3 1 2 2 1 . . . . . . .
+        .DB      $7F,$7F,$FF,$DA,$40,$00 ; 1 3 3 3 1 3 3 3 3 3 3 3 3 1 2 2 1 . . . . . . .
+        .DB      $7F,$DF,$FF,$DA,$40,$00 ; 1 3 3 3 3 1 3 3 3 3 3 3 3 1 2 2 1 . . . . . . .
+        .DB      $7F,$FF,$FF,$DA,$40,$00 ; 1 3 3 3 3 3 3 3 3 3 3 3 3 1 2 2 1 . . . . . . .
+        .DB      $7F,$FF,$FF,$DA,$40,$00 ; 1 3 3 3 3 3 3 3 3 3 3 3 3 1 2 2 1 . . . . . . .
+        .DB      $7F,$FF,$FF,$DA,$50,$00 ; 1 3 3 3 3 3 3 3 3 3 3 3 3 1 2 2 1 1 . . . . . .
+        .DB      $7F,$FF,$FF,$DA,$94,$00 ; 1 3 3 3 3 3 3 3 3 3 3 3 3 1 2 2 2 1 1 . . . . .
+        .DB      $7F,$FF,$FF,$D6,$A5,$00 ; 1 3 3 3 3 3 3 3 3 3 3 3 3 1 1 2 2 2 1 1 . . . .
+        .DB      $7F,$FF,$FF,$55,$A9,$40 ; 1 3 3 3 3 3 3 3 3 3 3 3 1 1 1 1 2 2 2 1 1 . . .
+        .DB      $57,$FF,$FD,$D5,$6A,$40 ; 1 1 1 3 3 3 3 3 3 3 3 1 3 1 1 1 1 2 2 2 1 . . .
+        .DB      $55,$55,$55,$75,$5A,$40 ; 1 1 1 1 1 1 1 1 1 1 1 1 1 3 1 1 1 1 2 2 1 . . .
+        .DB      $AA,$AA,$A5,$5D,$5A,$40 ; 2 2 2 2 2 2 2 2 2 2 1 1 1 1 3 1 1 1 2 2 1 . . .
+        .DB      $AA,$AA,$A9,$57,$5A,$40 ; 2 2 2 2 2 2 2 2 2 2 2 1 1 1 1 3 1 1 2 2 1 . . .
+        .DB      $55,$55,$6A,$55,$DA,$40 ; 1 1 1 1 1 1 1 1 1 2 2 2 1 1 1 1 3 1 2 2 1 . . .
+        .DB      $00,$00,$5A,$95,$5A,$40 ; . . . . . . . . 1 1 2 2 2 1 1 1 1 1 2 2 1 . . .
+        .DB      $00,$00,$16,$AA,$AA,$40 ; . . . . . . . . . 1 1 2 2 2 2 2 2 2 2 2 1 . . .
+        .DB      $00,$00,$05,$AA,$AA,$40 ; . . . . . . . . . . 1 1 2 2 2 2 2 2 2 2 1 . . .
+        .DB      $00,$00,$01,$55,$55,$40 ; . . . . . . . . . . . 1 1 1 1 1 1 1 1 1 1 . . .
+;*******************************************************************************
+; LASER_BASE_BODY_DESTROY
+;
+; Damaged center laser-base body.
+; Object record: $185E; bitmap header: $1860.
+; Hotspot offsets: X = 0, Y = 0.
+; Bitmap: 24 x 21 pixels, 6 bytes per row.
+;*******************************************************************************
+LASER_BASE_BODY_DESTROY:
+        .DB      $00,$00 ; Hotspot offsets: X = 0, Y = 0
+LASER_BASE_BODY_DESTROY_HEADER:
+        .DB      $06,$15 ; Bitmap size: 6 bytes/row, 21 rows
+        .DB      $00,$00,$00,$08,$D0,$00 ; . . . . . . . . . . . . . . 2 . 3 1 . . . . . .
+        .DB      $00,$00,$00,$04,$20,$C0 ; . . . . . . . . . . . . . . 1 . . 2 . . 3 . . .
+        .DB      $00,$00,$00,$43,$20,$00 ; . . . . . . . . . . . . 1 . . 3 . 2 . . . . . .
+        .DB      $00,$00,$00,$04,$00,$00 ; . . . . . . . . . . . . . . 1 . . . . . . . . .
+        .DB      $00,$00,$00,$23,$00,$00 ; . . . . . . . . . . . . . 2 . 3 . . . . . . . .
+        .DB      $00,$00,$00,$20,$C0,$00 ; . . . . . . . . . . . . . 2 . . 3 . . . . . . .
+        .DB      $00,$00,$08,$0C,$F0,$00 ; . . . . . . . . . . 2 . . . 3 . 3 3 . . . . . .
+        .DB      $00,$08,$0C,$30,$40,$40 ; . . . . . . 2 . . . 3 . . 3 . . 1 . . . 1 . . .
+        .DB      $00,$00,$0D,$23,$01,$00 ; . . . . . . . . . . 3 1 . 2 . 3 . . . 1 . . . .
+        .DB      $00,$00,$00,$C2,$01,$00 ; . . . . . . . . . . . . 3 . . 2 . . . 1 . . . .
+        .DB      $00,$00,$0C,$20,$40,$40 ; . . . . . . . . . . 3 . . 2 . . 1 . . . 1 . . .
+        .DB      $00,$0C,$20,$50,$FD,$00 ; . . . . . . 3 . . 2 . . 1 1 . . 3 3 3 1 . . . .
+        .DB      $00,$00,$01,$10,$63,$40 ; . . . . . . . . . . . 1 . 1 . . 1 2 . 3 1 . . .
+        .DB      $00,$B2,$9C,$8A,$8A,$00 ; . . . . 2 3 . 2 2 1 3 . 2 . 2 2 2 . 2 2 . . . .
+        .DB      $00,$E0,$50,$20,$20,$00 ; . . . . 3 2 . . 1 1 . . . 2 . . . 2 . . . . . .
+        .DB      $23,$C8,$7C,$20,$00,$00 ; . 2 . 3 3 . 2 . 1 3 3 . . 2 . . . . . . . . . .
+        .DB      $67,$CB,$30,$0C,$00,$00 ; 1 2 1 3 3 . 2 3 . 3 . . . . 3 . . . . . . . . .
+        .DB      $31,$01,$50,$00,$00,$00 ; . 3 . 1 . . . 1 1 1 . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$40,$00,$00,$00,$00 ; . . . . 1 . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . . . . . .
+;*******************************************************************************
+; LASER_TURRET_VERTICAL
+;
+; Laser turret oriented vertically.
+; Object record: $18E0; bitmap header: $18E2.
+; Hotspot offsets: X = 7, Y = 9.
+; Bitmap: 20 x 19 pixels, 5 bytes per row.
+;*******************************************************************************
+LASER_TURRET_VERTICAL:
+        .DB      $07,$09 ; Hotspot offsets: X = 7, Y = 9
+LASER_TURRET_VERTICAL_HEADER:
+        .DB      $05,$13 ; Bitmap size: 5 bytes/row, 19 rows
+        .DB      $00,$0F,$00,$00,$00 ; . . . . . . 3 3 . . . . . . . . . . . .
+        .DB      $00,$3F,$C0,$00,$00 ; . . . . . 3 3 3 3 . . . . . . . . . . .
+        .DB      $00,$30,$C0,$00,$00 ; . . . . . 3 . . 3 . . . . . . . . . . .
+        .DB      $00,$3F,$C0,$00,$00 ; . . . . . 3 3 3 3 . . . . . . . . . . .
+        .DB      $00,$0F,$00,$00,$00 ; . . . . . . 3 3 . . . . . . . . . . . .
+        .DB      $02,$0F,$08,$00,$00 ; . . . 2 . . 3 3 . . 2 . . . . . . . . .
+        .DB      $0A,$0F,$0A,$00,$00 ; . . 2 2 . . 3 3 . . 2 2 . . . . . . . .
+        .DB      $0A,$0F,$0A,$00,$00 ; . . 2 2 . . 3 3 . . 2 2 . . . . . . . .
+        .DB      $2B,$FF,$FE,$80,$00 ; . 2 2 3 3 3 3 3 3 3 3 2 2 . . . . . . .
+        .DB      $2F,$FF,$FF,$80,$00 ; . 2 3 3 3 3 3 3 3 3 3 3 2 . . . . . . .
+        .DB      $AF,$FF,$FF,$A0,$00 ; 2 2 3 3 3 3 3 3 3 3 3 3 2 2 . . . . . .
+        .DB      $BF,$F5,$FF,$E0,$00 ; 2 3 3 3 3 3 1 1 3 3 3 3 3 2 . . . . . .
+        .DB      $B7,$F5,$FD,$E0,$00 ; 2 3 1 3 3 3 1 1 3 3 3 1 3 2 . . . . . .
+        .DB      $BB,$F5,$FD,$60,$00 ; 2 3 2 3 3 3 1 1 3 3 3 1 1 2 . . . . . .
+        .DB      $85,$F5,$F5,$20,$00 ; 2 . 1 1 3 3 1 1 3 3 1 1 . 2 . . . . . .
+        .DB      $85,$55,$55,$20,$00 ; 2 . 1 1 1 1 1 1 1 1 1 1 . 2 . . . . . .
+        .DB      $81,$55,$54,$20,$00 ; 2 . . 1 1 1 1 1 1 1 1 . . 2 . . . . . .
+        .DB      $80,$15,$40,$20,$00 ; 2 . . . . 1 1 1 1 . . . . 2 . . . . . .
+        .DB      $00,$05,$00,$00,$00 ; . . . . . . 1 1 . . . . . . . . . . . .
+;*******************************************************************************
+; LASER_TURRET_VERTICAL_FIRE
+;
+; Vertical laser-turret firing frame.
+; Object record: $1943; bitmap header: $1945.
+; Hotspot offsets: X = 7, Y = 4.
+; Bitmap: 20 x 16 pixels, 5 bytes per row.
+;*******************************************************************************
+LASER_TURRET_VERTICAL_FIRE:
+        .DB      $07,$04 ; Hotspot offsets: X = 7, Y = 4
+LASER_TURRET_VERTICAL_FIRE_HEADER:
+        .DB      $05,$10 ; Bitmap size: 5 bytes/row, 16 rows
+        .DB      $00,$0F,$00,$00,$00 ; . . . . . . 3 3 . . . . . . . . . . . .
+        .DB      $00,$3F,$C0,$00,$00 ; . . . . . 3 3 3 3 . . . . . . . . . . .
+        .DB      $02,$30,$C8,$00,$00 ; . . . 2 . 3 . . 3 . 2 . . . . . . . . .
+        .DB      $0A,$3F,$CA,$00,$00 ; . . 2 2 . 3 3 3 3 . 2 2 . . . . . . . .
+        .DB      $0A,$0F,$0A,$00,$00 ; . . 2 2 . . 3 3 . . 2 2 . . . . . . . .
+        .DB      $2B,$FF,$FE,$80,$00 ; . 2 2 3 3 3 3 3 3 3 3 2 2 . . . . . . .
+        .DB      $2F,$FF,$FF,$80,$00 ; . 2 3 3 3 3 3 3 3 3 3 3 2 . . . . . . .
+        .DB      $AF,$FF,$FF,$A0,$00 ; 2 2 3 3 3 3 3 3 3 3 3 3 2 2 . . . . . .
+        .DB      $BF,$F5,$FF,$E0,$00 ; 2 3 3 3 3 3 1 1 3 3 3 3 3 2 . . . . . .
+        .DB      $B7,$F5,$FD,$E0,$00 ; 2 3 1 3 3 3 1 1 3 3 3 1 3 2 . . . . . .
+        .DB      $BB,$F5,$FD,$60,$00 ; 2 3 2 3 3 3 1 1 3 3 3 1 1 2 . . . . . .
+        .DB      $85,$F5,$F5,$20,$00 ; 2 . 1 1 3 3 1 1 3 3 1 1 . 2 . . . . . .
+        .DB      $85,$55,$55,$20,$00 ; 2 . 1 1 1 1 1 1 1 1 1 1 . 2 . . . . . .
+        .DB      $81,$55,$54,$20,$00 ; 2 . . 1 1 1 1 1 1 1 1 . . 2 . . . . . .
+        .DB      $80,$15,$40,$20,$00 ; 2 . . . . 1 1 1 1 . . . . 2 . . . . . .
+        .DB      $00,$05,$00,$00,$00 ; . . . . . . 1 1 . . . . . . . . . . . .
+;*******************************************************************************
+; LASER_TURRET_HORIZONTAL
+;
+; Laser turret oriented horizontally.
+; Object record: $1997; bitmap header: $1999.
+; Hotspot offsets: X = 7, Y = 7.
+; Bitmap: 20 x 14 pixels, 5 bytes per row.
+;*******************************************************************************
+LASER_TURRET_HORIZONTAL:
+        .DB      $07,$07 ; Hotspot offsets: X = 7, Y = 7
+LASER_TURRET_HORIZONTAL_HEADER:
+        .DB      $05,$0E ; Bitmap size: 5 bytes/row, 14 rows
+        .DB      $00,$00,$0A,$A8,$00 ; . . . . . . . . . . 2 2 2 2 2 . . . . .
+        .DB      $00,$00,$AB,$C0,$00 ; . . . . . . . . 2 2 2 3 3 . . . . . . .
+        .DB      $00,$0A,$3F,$50,$00 ; . . . . . . 2 2 . 3 3 3 1 1 . . . . . .
+        .DB      $00,$2A,$FF,$D0,$00 ; . . . . . 2 2 2 3 3 3 3 3 1 . . . . . .
+        .DB      $00,$00,$FF,$D4,$00 ; . . . . . . . . 3 3 3 3 3 1 1 . . . . .
+        .DB      $3F,$00,$FF,$D4,$00 ; . 3 3 3 . . . . 3 3 3 3 3 1 1 . . . . .
+        .DB      $F3,$FF,$FD,$55,$00 ; 3 3 . 3 3 3 3 3 3 3 3 1 1 1 1 1 . . . .
+        .DB      $F3,$FF,$FD,$55,$00 ; 3 3 . 3 3 3 3 3 3 3 3 1 1 1 1 1 . . . .
+        .DB      $3F,$00,$FF,$D4,$00 ; . 3 3 3 . . . . 3 3 3 3 3 1 1 . . . . .
+        .DB      $00,$00,$FF,$D4,$00 ; . . . . . . . . 3 3 3 3 3 1 1 . . . . .
+        .DB      $00,$2A,$FF,$D0,$00 ; . . . . . 2 2 2 3 3 3 3 3 1 . . . . . .
+        .DB      $00,$0A,$3F,$50,$00 ; . . . . . . 2 2 . 3 3 3 1 1 . . . . . .
+        .DB      $00,$00,$AB,$C0,$00 ; . . . . . . . . 2 2 2 3 3 . . . . . . .
+        .DB      $00,$00,$0A,$A8,$00 ; . . . . . . . . . . 2 2 2 2 2 . . . . .
+;*******************************************************************************
+; LASER_TURRET_HORIZONTAL_FIRE
+;
+; Horizontal laser-turret firing frame.
+; Object record: $19E1; bitmap header: $19E3.
+; Hotspot offsets: X = 5, Y = 7.
+; Bitmap: 20 x 14 pixels, 5 bytes per row.
+;*******************************************************************************
+LASER_TURRET_HORIZONTAL_FIRE:
+        .DB      $05,$07 ; Hotspot offsets: X = 5, Y = 7
+LASER_TURRET_HORIZONTAL_FIRE_HEADER:
+        .DB      $05,$0E ; Bitmap size: 5 bytes/row, 14 rows
+        .DB      $00,$00,$0A,$A8,$00 ; . . . . . . . . . . 2 2 2 2 2 . . . . .
+        .DB      $00,$00,$AB,$C0,$00 ; . . . . . . . . 2 2 2 3 3 . . . . . . .
+        .DB      $00,$0A,$3F,$50,$00 ; . . . . . . 2 2 . 3 3 3 1 1 . . . . . .
+        .DB      $00,$2A,$FF,$D0,$00 ; . . . . . 2 2 2 3 3 3 3 3 1 . . . . . .
+        .DB      $00,$00,$FF,$D4,$00 ; . . . . . . . . 3 3 3 3 3 1 1 . . . . .
+        .DB      $00,$FC,$FF,$D4,$00 ; . . . . 3 3 3 . 3 3 3 3 3 1 1 . . . . .
+        .DB      $03,$CF,$FD,$55,$00 ; . . . 3 3 . 3 3 3 3 3 1 1 1 1 1 . . . .
+        .DB      $03,$CF,$FD,$55,$00 ; . . . 3 3 . 3 3 3 3 3 1 1 1 1 1 . . . .
+        .DB      $00,$FC,$FF,$D4,$00 ; . . . . 3 3 3 . 3 3 3 3 3 1 1 . . . . .
+        .DB      $00,$00,$FF,$D4,$00 ; . . . . . . . . 3 3 3 3 3 1 1 . . . . .
+        .DB      $00,$2A,$FF,$D0,$00 ; . . . . . 2 2 2 3 3 3 3 3 1 . . . . . .
+        .DB      $00,$0A,$3F,$50,$00 ; . . . . . . 2 2 . 3 3 3 1 1 . . . . . .
+        .DB      $00,$00,$AB,$C0,$00 ; . . . . . . . . 2 2 2 3 3 . . . . . . .
+        .DB      $00,$00,$0A,$A8,$00 ; . . . . . . . . . . 2 2 2 2 2 . . . . .
+; Laser-turret frame sequences. Control bytes precede object-record pointers;
+; $00 terminates each list by pointing back to its first entry.
+LASER_TURRET_VERTICAL_IDLE_SEQUENCE:
+        .DB      $FF
+        .DW      LASER_TURRET_VERTICAL
+        .DB      $00
+        .DW      LASER_TURRET_VERTICAL_IDLE_SEQUENCE
+LASER_TURRET_HORIZONTAL_IDLE_SEQUENCE:
+        .DB      $FF
+        .DW      LASER_TURRET_HORIZONTAL
+        .DB      $00
+        .DW      LASER_TURRET_HORIZONTAL_IDLE_SEQUENCE
+LASER_TURRET_VERTICAL_FIRE_SEQUENCE:
+        .DB      $0E
+        .DW      LASER_TURRET_VERTICAL_FIRE
+        .DB      $FF
+        .DW      LASER_TURRET_VERTICAL
+        .DB      $00
+        .DW      LASER_TURRET_VERTICAL_FIRE_SEQUENCE
+LASER_TURRET_HORIZONTAL_FIRE_SEQUENCE:
+        .DB      $0E
+        .DW      LASER_TURRET_HORIZONTAL_FIRE
+        .DB      $FF
+        .DW      LASER_TURRET_HORIZONTAL
+        .DB      $00
+        .DW      LASER_TURRET_HORIZONTAL_FIRE_SEQUENCE
+;*******************************************************************************
+; SPACE_MINE_1
+;
+; Incoming space mine, growth stage 1.
+; Object record: $1A49; bitmap header: $1A4B.
+; Hotspot offsets: X = 2, Y = 2.
+; Bitmap: 8 x 4 pixels, 2 bytes per row.
+;*******************************************************************************
+SPACE_MINE_1:
+        .DB      $02,$02 ; Hotspot offsets: X = 2, Y = 2
+SPACE_MINE_1_HEADER:
+        .DB      $02,$04 ; Bitmap size: 2 bytes/row, 4 rows
+        .DB      $14,$00 ; . 1 1 . . . . .
+        .DB      $DD,$00 ; 3 1 3 1 . . . .
+        .DB      $77,$00 ; 1 3 1 3 . . . .
+        .DB      $1C,$00 ; . 1 3 . . . . .
+;*******************************************************************************
+; SPACE_MINE_2
+;
+; Incoming space mine, growth stage 2.
+; Object record: $1A55; bitmap header: $1A57.
+; Hotspot offsets: X = 3, Y = 3.
+; Bitmap: 12 x 6 pixels, 3 bytes per row.
+;*******************************************************************************
+SPACE_MINE_2:
+        .DB      $03,$03 ; Hotspot offsets: X = 3, Y = 3
+SPACE_MINE_2_HEADER:
+        .DB      $03,$06 ; Bitmap size: 3 bytes/row, 6 rows
+        .DB      $07,$00,$00 ; . . 1 3 . . . . . . . .
+        .DB      $37,$C0,$00 ; . 3 1 3 3 . . . . . . .
+        .DB      $D5,$50,$00 ; 3 1 1 1 1 1 . . . . . .
+        .DB      $77,$D0,$00 ; 1 3 1 3 3 1 . . . . . .
+        .DB      $3D,$40,$00 ; . 3 3 1 1 . . . . . . .
+        .DB      $0D,$00,$00 ; . . 3 1 . . . . . . . .
+;*******************************************************************************
+; SPACE_MINE_3
+;
+; Incoming space mine, growth stage 3.
+; Object record: $1A6B; bitmap header: $1A6D.
+; Hotspot offsets: X = 4, Y = 4.
+; Bitmap: 12 x 8 pixels, 3 bytes per row.
+;*******************************************************************************
+SPACE_MINE_3:
+        .DB      $04,$04 ; Hotspot offsets: X = 4, Y = 4
+SPACE_MINE_3_HEADER:
+        .DB      $03,$08 ; Bitmap size: 3 bytes/row, 8 rows
+        .DB      $03,$C0,$00 ; . . . 3 3 . . . . . . .
+        .DB      $0F,$50,$00 ; . . 3 3 1 1 . . . . . .
+        .DB      $3D,$74,$00 ; . 3 3 1 1 3 1 . . . . .
+        .DB      $DD,$DD,$00 ; 3 1 3 1 3 1 3 1 . . . .
+        .DB      $77,$77,$00 ; 1 3 1 3 1 3 1 3 . . . .
+        .DB      $17,$D4,$00 ; . 1 1 3 3 1 1 . . . . .
+        .DB      $0D,$50,$00 ; . . 3 1 1 1 . . . . . .
+        .DB      $01,$40,$00 ; . . . 1 1 . . . . . . .
+;*******************************************************************************
+; SPACE_MINE_4
+;
+; Incoming space mine, growth stage 4.
+; Object record: $1A87; bitmap header: $1A89.
+; Hotspot offsets: X = 4, Y = 5.
+; Bitmap: 16 x 9 pixels, 4 bytes per row.
+;*******************************************************************************
+SPACE_MINE_4:
+        .DB      $04,$05 ; Hotspot offsets: X = 4, Y = 5
+SPACE_MINE_4_HEADER:
+        .DB      $04,$09 ; Bitmap size: 4 bytes/row, 9 rows
+        .DB      $01,$70,$00,$00 ; . . . 1 1 3 . . . . . . . . . .
+        .DB      $05,$FC,$00,$00 ; . . 1 1 3 3 3 . . . . . . . . .
+        .DB      $35,$75,$00,$00 ; . 3 1 1 1 3 1 1 . . . . . . . .
+        .DB      $3D,$55,$00,$00 ; . 3 3 1 1 1 1 1 . . . . . . . .
+        .DB      $DF,$5D,$40,$00 ; 3 1 3 3 1 1 3 1 1 . . . . . . .
+        .DB      $55,$5F,$C0,$00 ; 1 1 1 1 1 1 3 3 3 . . . . . . .
+        .DB      $35,$7D,$00,$00 ; . 3 1 1 1 3 3 1 . . . . . . . .
+        .DB      $07,$74,$00,$00 ; . . 1 3 1 3 1 . . . . . . . . .
+        .DB      $03,$D0,$00,$00 ; . . . 3 3 1 . . . . . . . . . .
+;*******************************************************************************
+; SPACE_MINE_5
+;
+; Incoming space mine, growth stage 5.
+; Object record: $1AAF; bitmap header: $1AB1.
+; Hotspot offsets: X = 5, Y = 6.
+; Bitmap: 16 x 11 pixels, 4 bytes per row.
+;*******************************************************************************
+SPACE_MINE_5:
+        .DB      $05,$06 ; Hotspot offsets: X = 5, Y = 6
+SPACE_MINE_5_HEADER:
+        .DB      $04,$0B ; Bitmap size: 4 bytes/row, 11 rows
+        .DB      $00,$D4,$00,$00 ; . . . . 3 1 1 . . . . . . . . .
+        .DB      $0F,$57,$C0,$00 ; . . 3 3 1 1 1 3 3 . . . . . . .
+        .DB      $3F,$F5,$D0,$00 ; . 3 3 3 3 3 1 1 3 1 . . . . . .
+        .DB      $3D,$FD,$50,$00 ; . 3 3 1 3 3 3 1 1 1 . . . . . .
+        .DB      $35,$75,$70,$00 ; . 3 1 1 1 3 1 1 1 3 . . . . . .
+        .DB      $D7,$55,$FC,$00 ; 3 1 1 3 1 1 1 1 3 3 3 . . . . .
+        .DB      $55,$5D,$F4,$00 ; 1 1 1 1 1 1 3 1 3 3 1 . . . . .
+        .DB      $1D,$DF,$F0,$00 ; . 1 3 1 3 1 3 3 3 3 . . . . . .
+        .DB      $3F,$57,$F0,$00 ; . 3 3 3 1 1 1 3 3 3 . . . . . .
+        .DB      $05,$5F,$40,$00 ; . . 1 1 1 1 3 3 1 . . . . . . .
+        .DB      $00,$5C,$00,$00 ; . . . . 1 1 3 . . . . . . . . .
+; Space-mine growth sequences. Control bytes precede object-record pointers.
+SPACE_MINE_GROW_SEQUENCE:
+        .DB      $1C
+        .DW      SPACE_MINE_1
+        .DB      $14
+        .DW      SPACE_MINE_2
+        .DB      $10
+        .DW      SPACE_MINE_3
+        .DB      $0C
+        .DW      SPACE_MINE_4
+        .DB      $FF
+        .DW      SPACE_MINE_5
+        .DB      $00
+        .DW      SPACE_MINE_GROW_SEQUENCE
+SPACE_MINE_FAST_GROW_SEQUENCE:
+        .DB      $09
+        .DW      SPACE_MINE_1
+        .DB      $09
+        .DW      SPACE_MINE_2
+        .DB      $09
+        .DW      SPACE_MINE_3
+        .DB      $09
+        .DW      SPACE_MINE_4
+        .DB      $FF
+        .DW      SPACE_MINE_5
+        .DB      $00
+        .DW      SPACE_MINE_GROW_SEQUENCE
+;*******************************************************************************
+; LASER_BASE_DESTROY_1
+;
+; Laser-base destruction animation, frame 1.
+; Object record: $1B03; bitmap header: $1B05.
+; Hotspot offsets: X = 8, Y = 6.
+; Bitmap: 16 x 12 pixels, 4 bytes per row.
+;*******************************************************************************
+LASER_BASE_DESTROY_1:
+        .DB      $08,$06 ; Hotspot offsets: X = 8, Y = 6
+LASER_BASE_DESTROY_1_HEADER:
+        .DB      $04,$0C ; Bitmap size: 4 bytes/row, 12 rows
+        .DB      $00,$C0,$04,$00 ; . . . . 3 . . . . . 1 . . . . .
+        .DB      $C0,$F3,$00,$00 ; 3 . . . 3 3 . 3 . . . . . . . .
+        .DB      $3F,$FF,$0C,$00 ; . 3 3 3 3 3 3 3 . . 3 . . . . .
+        .DB      $0F,$FF,$FC,$00 ; . . 3 3 3 3 3 3 3 3 3 . . . . .
+        .DB      $0F,$DF,$7F,$00 ; . . 3 3 3 1 3 3 1 3 3 3 . . . .
+        .DB      $FF,$55,$7C,$00 ; 3 3 3 3 1 1 1 1 1 3 3 . . . . .
+        .DB      $FD,$55,$7C,$00 ; 3 3 3 1 1 1 1 1 1 3 3 . . . . .
+        .DB      $3F,$F5,$7C,$00 ; . 3 3 3 3 3 1 1 1 3 3 . . . . .
+        .DB      $0F,$3F,$F0,$00 ; . . 3 3 . 3 3 3 3 3 . . . . . .
+        .DB      $4C,$0F,$C1,$00 ; 1 . 3 . . . 3 3 3 . . 1 . . . .
+        .DB      $00,$0F,$C0,$00 ; . . . . . . 3 3 3 . . . . . . .
+        .DB      $00,$03,$00,$00 ; . . . . . . . 3 . . . . . . . .
+;*******************************************************************************
+; LASER_BASE_DESTROY_2
+;
+; Laser-base destruction animation, frame 2.
+; Object record: $1B37; bitmap header: $1B39.
+; Hotspot offsets: X = 10, Y = 8.
+; Bitmap: 20 x 17 pixels, 5 bytes per row.
+;*******************************************************************************
+LASER_BASE_DESTROY_2:
+        .DB      $0A,$08 ; Hotspot offsets: X = 10, Y = 8
+LASER_BASE_DESTROY_2_HEADER:
+        .DB      $05,$11 ; Bitmap size: 5 bytes/row, 17 rows
+        .DB      $01,$00,$00,$00,$00 ; . . . 1 . . . . . . . . . . . . . . . .
+        .DB      $00,$40,$00,$00,$00 ; . . . . 1 . . . . . . . . . . . . . . .
+        .DB      $00,$54,$00,$00,$00 ; . . . . 1 1 1 . . . . . . . . . . . . .
+        .DB      $00,$14,$04,$00,$00 ; . . . . . 1 1 . . . 1 . . . . . . . . .
+        .DB      $00,$15,$54,$00,$C0 ; . . . . . 1 1 1 1 1 1 . . . . . 3 . . .
+        .DB      $00,$1D,$54,$14,$00 ; . . . . . 1 3 1 1 1 1 . . 1 1 . . . . .
+        .DB      $00,$5F,$D5,$55,$00 ; . . . . 1 1 3 3 3 1 1 1 1 1 1 1 . . . .
+        .DB      $00,$5F,$FF,$F5,$00 ; . . . . 1 1 3 3 3 3 3 3 3 3 1 1 . . . .
+        .DB      $C1,$7F,$FF,$F4,$00 ; 3 . . 1 1 3 3 3 3 3 3 3 3 3 1 . . . . .
+        .DB      $15,$7F,$FF,$D4,$00 ; . 1 1 1 1 3 3 3 3 3 3 3 3 1 1 . . . . .
+        .DB      $15,$FF,$FF,$D4,$00 ; . 1 1 1 3 3 3 3 3 3 3 3 3 1 1 . . . . .
+        .DB      $05,$FF,$FF,$F5,$00 ; . . 1 1 3 3 3 3 3 3 3 3 3 3 1 1 . . . .
+        .DB      $05,$F5,$FD,$F4,$00 ; . . 1 1 3 3 1 1 3 3 3 1 3 3 1 . . . . .
+        .DB      $00,$55,$55,$54,$00 ; . . . . 1 1 1 1 1 1 1 1 1 1 1 . . . . .
+        .DB      $05,$14,$14,$45,$40 ; . . 1 1 . 1 1 . . 1 1 . 1 . 1 1 1 . . .
+        .DB      $04,$00,$00,$40,$40 ; . . 1 . . . . . . . . . 1 . . . 1 . . .
+        .DB      $50,$00,$00,$40,$00 ; 1 1 . . . . . . . . . . 1 . . . . . . .
+;*******************************************************************************
+; LASER_BASE_DESTROY_3
+;
+; Laser-base destruction animation, frame 3.
+; Object record: $1B90; bitmap header: $1B92.
+; Hotspot offsets: X = 12, Y = 11.
+; Bitmap: 24 x 23 pixels, 6 bytes per row.
+;*******************************************************************************
+LASER_BASE_DESTROY_3:
+        .DB      $0C,$0B ; Hotspot offsets: X = 12, Y = 11
+LASER_BASE_DESTROY_3_HEADER:
+        .DB      $06,$17 ; Bitmap size: 6 bytes/row, 23 rows
+        .DB      $00,$00,$80,$00,$00,$00 ; . . . . . . . . 2 . . . . . . . . . . . . . . .
+        .DB      $00,$02,$60,$00,$00,$00 ; . . . . . . . 2 1 2 . . . . . . . . . . . . . .
+        .DB      $00,$A9,$58,$00,$00,$00 ; . . . . 2 2 2 1 1 1 2 . . . . . . . . . . . . .
+        .DB      $02,$55,$56,$0A,$00,$00 ; . . . 2 1 1 1 1 1 1 1 2 . . 2 2 . . . . . . . .
+        .DB      $0B,$DF,$F5,$A6,$80,$00 ; . . 2 3 3 1 3 3 3 3 1 1 2 2 1 2 2 . . . . . . .
+        .DB      $25,$FF,$FD,$7D,$60,$00 ; . 2 1 1 3 3 3 3 3 3 3 1 1 3 3 1 1 2 . . . . . .
+        .DB      $09,$7F,$FF,$FD,$58,$00 ; . . 2 1 1 3 3 3 3 3 3 3 3 3 3 1 1 1 2 . . . . .
+        .DB      $02,$FF,$FF,$FF,$56,$00 ; . . . 2 3 3 3 3 3 3 3 3 3 3 3 3 1 1 1 2 . . . .
+        .DB      $00,$BF,$FF,$FF,$D5,$80 ; . . . . 2 3 3 3 3 3 3 3 3 3 3 3 3 1 1 1 2 . . .
+        .DB      $02,$5F,$FF,$FF,$FD,$60 ; . . . 2 1 1 3 3 3 3 3 3 3 3 3 3 3 3 3 1 1 2 . .
+        .DB      $09,$7F,$FF,$FF,$F5,$80 ; . . 2 1 1 3 3 3 3 3 3 3 3 3 3 3 3 3 1 1 2 . . .
+        .DB      $25,$FF,$FF,$FF,$D6,$00 ; . 2 1 1 3 3 3 3 3 3 3 3 3 3 3 3 3 1 1 2 . . . .
+        .DB      $A5,$FF,$FF,$FF,$58,$00 ; 2 2 1 1 3 3 3 3 3 3 3 3 3 3 3 3 1 1 2 . . . . .
+        .DB      $25,$5F,$FF,$F5,$58,$00 ; . 2 1 1 1 1 3 3 3 3 3 3 3 3 1 1 1 1 2 . . . . .
+        .DB      $09,$FF,$FF,$FD,$A0,$00 ; . . 2 1 3 3 3 3 3 3 3 3 3 3 3 1 2 2 . . . . . .
+        .DB      $02,$FB,$FF,$FE,$00,$00 ; . . . 2 3 3 2 3 3 3 3 3 3 3 3 2 . . . . . . . .
+        .DB      $00,$ED,$FF,$FE,$00,$00 ; . . . . 3 2 3 1 3 3 3 3 3 3 3 2 . . . . . . . .
+        .DB      $00,$9F,$FF,$FE,$A0,$00 ; . . . . 2 1 3 3 3 3 3 3 3 3 3 2 2 2 . . . . . .
+        .DB      $02,$57,$DF,$FD,$58,$00 ; . . . 2 1 1 1 3 3 1 3 3 3 3 3 1 1 1 2 . . . . .
+        .DB      $00,$95,$5B,$75,$60,$00 ; . . . . 2 1 1 1 1 1 2 3 1 3 1 1 1 2 . . . . . .
+        .DB      $00,$25,$62,$55,$80,$00 ; . . . . . 2 1 1 1 2 . 2 1 1 1 1 2 . . . . . . .
+        .DB      $00,$09,$80,$96,$00,$00 ; . . . . . . 2 1 2 . . . 2 1 1 2 . . . . . . . .
+        .DB      $00,$02,$00,$28,$00,$00 ; . . . . . . . 2 . . . . . 2 2 . . . . . . . . .
 	 ld   h,(hl)
-	 inc  c
-	 dec  bc
-	 ld   b,$17
-	 add  a,b
-	 nop
-	 ex   af,af'
-	 nop
-	 nop
-	 add  a,b
-	 jr   nz,$1C2B
-	 jr   nz,$1C2D
-	 ld   (bc),a
-	 nop
-	 ex   af,af'
-	 nop
-	 add  a,b
-	 nop
-	 ex   af,af'
-	 nop
-	 ld   (bc),a
-	 nop
-	 add  a,b
-	 nop
-	 jr   nz,$1C3B
-	 nop
-	 and  d
-	 and  c
-	 ld   b,b
-	 add  a,b
-	 nop
-	 nop
-	 dec  hl
-	 ld   a,(hl)
-	 ld   d,d
-	 nop
-	 nop
-	 nop
-	 xor  a
-	 rst  $38
-	 sub  h
-	 ld   (bc),a
-	 nop
-	 nop
-	 dec  l
-	 rst  $38
-	 call p,$0008
-	 nop
-	 dec  hl
-	 ld   a,a
-	 push de
-	 and  b
-	 nop
-	 nop
-	 dec  bc
-	 ld   a,a
-	 ret  c
-	 nop
-	 nop
-	 nop
-	 xor  e
-	 ld   a,a
-	 jp   c,$0000
-	 ld   (bc),a
-	 cp   l
-	 rst  $38
-	 or   $00
-	 nop
-	 ld   a,(bc)
-	 rst  $18
-	 rst  $38
-	 ret  pe
-	 nop
-	 nop
-	 dec  hl
-	 rst  $10
-	 rst  $38
-	 ld   h,b
-	 nop
-	 nop
-	 ld   (bc),a
-	 or   l
-	 ld   iyl,b
-	 nop
-	 nop
-	 ld   (bc),a
-	 xor  a
-	 db   $fd,$fa
-	 nop
-	 nop
-	 ex   af,af'
-	 ld   l,$AF
-	 ret  m
-	 nop
-	 nop
-	 jr   nz,$1CB3
-	 dec  hl
-	 jp   pe,$0000
-	 add  a,b
-	 nop
-	 ld   a,(bc)
-	 and  d
-	 add  a,b
-	 nop
-	 nop
-	 nop
-	 ex   af,af'
-	 nop
-	 jr   nz,$1C9B
-	 nop
-	 nop
-	 jr   nz,$1C9F
-	 ex   af,af'
-	 nop
-	 nop
-	 nop
-	 add  a,b
-	 nop
-	 ld   (bc),a
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 add  a,b
-	 inc  c
-	 dec  bc
-	 ld   b,$17
-	 nop
-	 nop
-	 inc  b
-	 inc  bc
-	 nop
-	 nop
-	 nop
-	 jr   nc,$1CFB
-	 ld   b,b
-	 jr   nc,$1CBD
-	 nop
-	 adc  a,h
-	 jr   nz,$1CC9
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   bc,$0000
-	 nop
-	 jr   nc,$1C5B
-	 add  a,b
-	 ret  nz
-	 jr   nz,$1CCF
-	 inc  c
-	 jr   nz,$1CD4
-	 nop
-	 rrca
-	 ret  nz
-	 jr   nc,$1CDF
-	 jr   z,$1CE5
-	 jr   nc,$1CDB
-	 nop
-	 nop
-	 jr   nc,$1CDF
-	 inc  bc
-	 nop
-	 rrca
-	 jp   nz,$14A0
-	 dec  b
-	 ld   b,b
-	 inc  bc
-	 pop  bc
-	 add  a,b
-	 ld   d,b
-	 ld   a,(de)
-	 nop
-	 rrca
-	 and  c
-	 and  c
-	 ld   b,h
-	 ld   c,d
-	 ld   b,b
-	 ret  p
-	 add  hl,hl
-	 add  a,l
-	 ld   d,b
-	 ld   d,h
-	 nop
-	 call m,$810A
-	 ld   d,h
-	 ld   d,b
-	 nop
-	 inc  c
-	 add  a,b
-	 ld   hl,($0090)
-	 ld   b,b
-	 rrca
-	 ld   d,h
-	 ex   af,af'
-	 ld   c,b
-	 ld   d,b
-	 nop
-	 jr   nc,$1D21
-	 jr   nz,$1D4F
-	 djnz $1D11
-	 ld   bc,$0C03
-	 inc  b
-	 inc  c
-	 nop
-	 nop
-	 djnz $1D1A
-	 nop
-	 ld   b,b
-	 nop
-	 jr   nz,$1D1F
-	 inc  b
-	 nop
-	 nop
-	 nop
-	 ld   bc,$000C
-	 inc  c
-	 inc  b
-	 nop
-	 nop
-	 nop
-	 ex   af,af'
-	 nop
-	 nop
-	 nop
-	 nop
-	 inc  b
-	 nop
-	 djnz $1CF4
-	 nop
-	 nop
-	 nop
-	 ld   (de),a
-	 inc  c
-	 nop
-	 nop
-	 inc  c
-	 dec  bc
-	 ld   b,$17
-	 nop
-	 nop
-	 ret  nz
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 jr   nz,$1D4D
-	 nop
-	 nop
-	 inc  b
-	 nop
-	 nop
-	 nop
-	 nop
-	 jr   nz,$1D56
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 add  a,b
-	 ld   (bc),a
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 djnz $1D6D
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 ret  nz
-	 nop
-	 nop
-	 nop
-	 inc  bc
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   bc,$0002
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 ret  nz
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   b,b
-	 ld   b,b
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   b,b
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   bc,$0000
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 nop
-	 inc  bc
-	 nop
-	 nop
-	 nop
-	 nop
-	 inc  b
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   bc,$4000
-	 nop
-	 nop
-	 ld   b,$03
-	 dec  de
-	 ld   b,$37
-	 dec  de
-	 ld   b,$90
-	 dec  de
-	 ld   b,$1F
-	 inc  e
-	 ld   b,$AD
-	 inc  e
-	 ld   b,$3B
-	 dec  e
-	 rst  $38
-	 add  a,(hl)
-	 rla
-	 nop
-	 ret
-	 dec  e
-	 rlca
-	 dec  b
-	 dec  b
-	 dec  bc
-	 nop
-	 ld   bc,$0000
-	 nop
-	 ret  nz
-	 dec  b
-	 ld   b,b
-	 inc  c
-	 nop
-	 ret  nz
-	 ld   d,$50
-	 inc  c
-	 nop
-	 ret  nz
-	 ld   e,d
-	 sub  h
-	 inc  c
-	 nop
-	 pop  bc
-	 ld   l,e
-	 and  l
-	 inc  c
-	 nop
-	 db   $fd,$af
-	 jp   (hl)
-	 call m,$C100
-	 ld   l,e
-	 and  l
-	 inc  c
-	 nop
-	 ret  nz
-	 ld   e,d
-	 sub  h
-	 inc  c
-	 nop
-	 ret  nz
-	 ld   d,$50
-	 inc  c
-	 nop
-	 ret  nz
-	 dec  b
-	 ld   b,b
-	 inc  c
-	 nop
-	 nop
-	 ld   bc,$0000
-	 nop
-	 rlca
-	 dec  b
-	 dec  b
-	 dec  bc
-	 nop
-	 ld   (bc),a
-	 nop
-	 nop
-	 nop
-	 nop
-	 ld   a,(bc)
-	 add  a,b
-	 nop
-	 nop
-	 ret  nz
-	 dec  hl
-	 and  b
-	 inc  c
-	 nop
-	 ret  nz
-	 xor  a
-	 ret  pe
-	 inc  c
-	 nop
-	 jp   nz,$FABD
-	 inc  c
-	 nop
-	 cp   $F5
-	 ld   a,(hl)
-	 call m,$C200
-	 cp   l
-	 jp   m,$000C
-	 ret  nz
-	 xor  a
-	 ret  pe
-	 inc  c
-	 nop
-	 ret  nz
-	 dec  hl
-	 and  b
-	 inc  c
-	 nop
-	 nop
-	 ld   a,(bc)
-	 add  a,b
-	 nop
-	 nop
-	 nop
-	 ld   (bc),a
-	 nop
-	 nop
-	 nop
-	 rlca
-	 dec  b
-	 dec  b
-	 dec  bc
-	 nop
-	 inc  bc
-	 nop
-	 nop
-	 nop
-	 nop
-	 rrca
-	 ret  nz
-	 nop
-	 nop
-	 nop
-	 dec  a
-	 ret  p
-	 nop
-	 nop
-	 nop
-	 push af
-	 ld   a,h
-	 nop
-	 nop
-	 jp   $5FD6
-	 inc  c
-	 nop
-	 rst  $38
-	 ld   e,d
-	 sub  a
-	 call m,$C300
-	 sub  $5F
-	 inc  c
-	 nop
-	 nop
-	 push af
-	 ld   a,h
-	 nop
-	 nop
-	 nop
-	 dec  a
-	 ret  p
-	 nop
-	 nop
-	 nop
-	 rrca
-	 ret  nz
-	 nop
-	 nop
-	 nop
-	 inc  bc
-	 nop
-	 nop
-	 nop
-	 inc  b
-	 pop  hl
-	 dec  e
-	 inc  b
-	 inc  e
-	 ld   e,$04
-	 ld   d,a
-	 ld   e,$04
-	 inc  e
-	 ld   e,$00
-	 sub  d
-	 ld   e,$D5
+;*******************************************************************************
+; LASER_BASE_DESTROY_4
+;
+; Laser-base destruction animation, frame 4.
+; Object record: $1C1F; bitmap header: $1C21.
+; Hotspot offsets: X = 12, Y = 11.
+; Bitmap: 24 x 23 pixels, 6 bytes per row.
+;*******************************************************************************
+LASER_BASE_DESTROY_4:
+        .DB      $0C,$0B ; Hotspot offsets: X = 12, Y = 11
+LASER_BASE_DESTROY_4_HEADER:
+        .DB      $06,$17 ; Bitmap size: 6 bytes/row, 23 rows
+        .DB      $80,$00,$08,$00,$00,$80 ; 2 . . . . . . . . . 2 . . . . . . . . . 2 . . .
+        .DB      $20,$00,$20,$00,$02,$00 ; . 2 . . . . . . . 2 . . . . . . . . . 2 . . . .
+        .DB      $08,$00,$80,$00,$08,$00 ; . . 2 . . . . . 2 . . . . . . . . . 2 . . . . .
+        .DB      $02,$00,$80,$00,$20,$00 ; . . . 2 . . . . 2 . . . . . . . . 2 . . . . . .
+        .DB      $00,$A2,$A1,$40,$80,$00 ; . . . . 2 2 . 2 2 2 . 1 1 . . . 2 . . . . . . .
+        .DB      $00,$2B,$7E,$52,$00,$00 ; . . . . . 2 2 3 1 3 3 2 1 1 . 2 . . . . . . . .
+        .DB      $00,$AF,$FF,$94,$02,$00 ; . . . . 2 2 3 3 3 3 3 3 2 1 1 . . . . 2 . . . .
+        .DB      $00,$2D,$FF,$F4,$08,$00 ; . . . . . 2 3 1 3 3 3 3 3 3 1 . . . 2 . . . . .
+        .DB      $00,$2B,$7F,$D5,$A0,$00 ; . . . . . 2 2 3 1 3 3 3 3 1 1 1 2 2 . . . . . .
+        .DB      $00,$0B,$7F,$D8,$00,$00 ; . . . . . . 2 3 1 3 3 3 3 1 2 . . . . . . . . .
+        .DB      $00,$AB,$7F,$DA,$00,$00 ; . . . . 2 2 2 3 1 3 3 3 3 1 2 2 . . . . . . . .
+        .DB      $02,$BD,$FF,$F6,$00,$00 ; . . . 2 2 3 3 1 3 3 3 3 3 3 1 2 . . . . . . . .
+        .DB      $0A,$DF,$FF,$E8,$00,$00 ; . . 2 2 3 1 3 3 3 3 3 3 3 2 2 . . . . . . . . .
+        .DB      $2B,$D7,$FF,$60,$00,$00 ; . 2 2 3 3 1 1 3 3 3 3 3 1 2 . . . . . . . . . .
+        .DB      $02,$B5,$FD,$68,$00,$00 ; . . . 2 2 3 1 1 3 3 3 1 1 2 2 . . . . . . . . .
+        .DB      $02,$AF,$FD,$FA,$00,$00 ; . . . 2 2 2 3 3 3 3 3 1 3 3 2 2 . . . . . . . .
+        .DB      $08,$2E,$AF,$F8,$00,$00 ; . . 2 . . 2 3 2 2 2 3 3 3 3 2 . . . . . . . . .
+        .DB      $20,$28,$2B,$EA,$00,$00 ; . 2 . . . 2 2 . . 2 2 3 3 2 2 2 . . . . . . . .
+        .DB      $80,$00,$0A,$A2,$80,$00 ; 2 . . . . . . . . . 2 2 2 2 . 2 2 . . . . . . .
+        .DB      $00,$00,$08,$00,$20,$00 ; . . . . . . . . . . 2 . . . . . . 2 . . . . . .
+        .DB      $00,$00,$20,$00,$08,$00 ; . . . . . . . . . 2 . . . . . . . . 2 . . . . .
+        .DB      $00,$00,$80,$00,$02,$00 ; . . . . . . . . 2 . . . . . . . . . . 2 . . . .
+        .DB      $00,$00,$00,$00,$00,$80 ; . . . . . . . . . . . . . . . . . . . . 2 . . .
+;*******************************************************************************
+; LASER_BASE_DESTROY_5
+;
+; Laser-base destruction animation, frame 5.
+; Object record: $1CAD; bitmap header: $1CAF.
+; Hotspot offsets: X = 12, Y = 11.
+; Bitmap: 24 x 23 pixels, 6 bytes per row.
+;*******************************************************************************
+LASER_BASE_DESTROY_5:
+        .DB      $0C,$0B ; Hotspot offsets: X = 12, Y = 11
+LASER_BASE_DESTROY_5_HEADER:
+        .DB      $06,$17 ; Bitmap size: 6 bytes/row, 23 rows
+        .DB      $00,$00,$04,$03,$00,$00 ; . . . . . . . . . . 1 . . . . 3 . . . . . . . .
+        .DB      $00,$30,$41,$40,$30,$00 ; . . . . . 3 . . 1 . . 1 1 . . . . 3 . . . . . .
+        .DB      $00,$8C,$20,$08,$00,$00 ; . . . . 2 . 3 . . 2 . . . . 2 . . . . . . . . .
+        .DB      $00,$00,$01,$00,$00,$00 ; . . . . . . . . . . . 1 . . . . . . . . . . . .
+        .DB      $30,$90,$80,$C0,$20,$00 ; . 3 . . 2 1 . . 2 . . . 3 . . . . 2 . . . . . .
+        .DB      $0C,$20,$02,$00,$0F,$C0 ; . . 3 . . 2 . . . . . 2 . . . . . . 3 3 3 . . .
+        .DB      $30,$08,$28,$0C,$30,$00 ; . 3 . . . . 2 . . 2 2 . . . 3 . . 3 . . . . . .
+        .DB      $00,$00,$30,$00,$03,$00 ; . . . . . . . . . 3 . . . . . . . . . 3 . . . .
+        .DB      $0F,$C2,$A0,$14,$05,$40 ; . . 3 3 3 . . 2 2 2 . . . 1 1 . . . 1 1 1 . . .
+        .DB      $03,$C1,$80,$50,$1A,$00 ; . . . 3 3 . . 1 2 . . . 1 1 . . . 1 2 2 . . . .
+        .DB      $0F,$A1,$A1,$44,$4A,$40 ; . . 3 3 2 2 . 1 2 2 . 1 1 . 1 . 1 . 2 2 1 . . .
+        .DB      $F0,$29,$85,$50,$54,$00 ; 3 3 . . . 2 2 1 2 . 1 1 1 1 . . 1 1 1 . . . . .
+        .DB      $FC,$0A,$81,$54,$50,$00 ; 3 3 3 . . . 2 2 2 . . 1 1 1 1 . 1 1 . . . . . .
+        .DB      $0C,$80,$2A,$90,$00,$40 ; . . 3 . 2 . . . . 2 2 2 2 1 . . . . . . 1 . . .
+        .DB      $0F,$54,$08,$48,$50,$00 ; . . 3 3 1 1 1 . . . 2 . 1 . 2 . 1 1 . . . . . .
+        .DB      $30,$14,$20,$40,$10,$00 ; . 3 . . . 1 1 . . 2 . . 1 . . . . 1 . . . . . .
+        .DB      $01,$03,$0C,$04,$0C,$00 ; . . . 1 . . . 3 . . 3 . . . 1 . . . 3 . . . . .
+        .DB      $00,$10,$00,$00,$40,$00 ; . . . . . 1 . . . . . . . . . . 1 . . . . . . .
+        .DB      $20,$00,$04,$00,$00,$00 ; . 2 . . . . . . . . 1 . . . . . . . . . . . . .
+        .DB      $01,$0C,$00,$0C,$04,$00 ; . . . 1 . . 3 . . . . . . . 3 . . . 1 . . . . .
+        .DB      $00,$00,$08,$00,$00,$00 ; . . . . . . . . . . 2 . . . . . . . . . . . . .
+        .DB      $00,$04,$00,$10,$C0,$00 ; . . . . . . 1 . . . . . . 1 . . 3 . . . . . . .
+        .DB      $00,$00,$12,$0C,$00,$00 ; . . . . . . . . . 1 . 2 . . 3 . . . . . . . . .
+;*******************************************************************************
+; LASER_BASE_DESTROY_6
+;
+; Laser-base destruction animation, frame 6.
+; Object record: $1D3B; bitmap header: $1D3D.
+; Hotspot offsets: X = 12, Y = 11.
+; Bitmap: 24 x 23 pixels, 6 bytes per row.
+;*******************************************************************************
+LASER_BASE_DESTROY_6:
+        .DB      $0C,$0B ; Hotspot offsets: X = 12, Y = 11
+LASER_BASE_DESTROY_6_HEADER:
+        .DB      $06,$17 ; Bitmap size: 6 bytes/row, 23 rows
+        .DB      $00,$00,$C0,$00,$00,$00 ; . . . . . . . . 3 . . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . . . . . .
+        .DB      $20,$00,$00,$00,$04,$00 ; . 2 . . . . . . . . . . . . . . . . 1 . . . . .
+        .DB      $00,$00,$00,$20,$00,$00 ; . . . . . . . . . . . . . 2 . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$80 ; . . . . . . . . . . . . . . . . . . . . 2 . . .
+        .DB      $02,$00,$00,$00,$00,$00 ; . . . 2 . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$10,$00,$00,$00 ; . . . . . . . . . 1 . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . . . . . .
+        .DB      $C0,$00,$00,$00,$03,$00 ; 3 . . . . . . . . . . . . . . . . . . 3 . . . .
+        .DB      $00,$00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$01,$02,$00,$00,$00 ; . . . . . . . 1 . . . 2 . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$C0,$00 ; . . . . . . . . . . . . . . . . 3 . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$40 ; . . . . . . . . . . . . . . . . . . . . 1 . . .
+        .DB      $40,$00,$00,$00,$00,$00 ; 1 . . . . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$40,$00,$00,$00 ; . . . . . . . . 1 . . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$00,$00,$00 ; . . . . . . . . . . . . . . . . . . . . . . . .
+        .DB      $01,$00,$00,$00,$00,$00 ; . . . 1 . . . . . . . . . . . . . . . . . . . .
+        .DB      $00,$00,$00,$03,$00,$00 ; . . . . . . . . . . . . . . . 3 . . . . . . . .
+        .DB      $00,$00,$04,$00,$00,$00 ; . . . . . . . . . . 1 . . . . . . . . . . . . .
+        .DB      $00,$01,$00,$40,$00,$00 ; . . . . . . . 1 . . . . 1 . . . . . . . . . . .
+; Laser-base destruction sequence.
+LASER_BASE_DESTROY_SEQUENCE:
+        .DB      $06
+        .DW      LASER_BASE_DESTROY_1
+        .DB      $06
+        .DW      LASER_BASE_DESTROY_2
+        .DB      $06
+        .DW      LASER_BASE_DESTROY_3
+        .DB      $06
+        .DW      LASER_BASE_DESTROY_4
+        .DB      $06
+        .DW      LASER_BASE_DESTROY_5
+        .DB      $06
+        .DW      LASER_BASE_DESTROY_6
+        .DB      $FF
+        .DW      BLANK
+        .DB      $00
+        .DW      LASER_BASE_DESTROY_SEQUENCE
+;*******************************************************************************
+; ATTACK_SATELLITE_1
+;
+; Attack-satellite animation, frame 1.
+; Object record: $1DE1; bitmap header: $1DE3.
+; Hotspot offsets: X = 7, Y = 5.
+; Bitmap: 20 x 11 pixels, 5 bytes per row.
+;*******************************************************************************
+ATTACK_SATELLITE_1:
+        .DB      $07,$05 ; Hotspot offsets: X = 7, Y = 5
+ATTACK_SATELLITE_1_HEADER:
+        .DB      $05,$0B ; Bitmap size: 5 bytes/row, 11 rows
+        .DB      $00,$01,$00,$00,$00 ; . . . . . . . 1 . . . . . . . . . . . .
+        .DB      $C0,$05,$40,$0C,$00 ; 3 . . . . . 1 1 1 . . . . . 3 . . . . .
+        .DB      $C0,$16,$50,$0C,$00 ; 3 . . . . 1 1 2 1 1 . . . . 3 . . . . .
+        .DB      $C0,$5A,$94,$0C,$00 ; 3 . . . 1 1 2 2 2 1 1 . . . 3 . . . . .
+        .DB      $C1,$6B,$A5,$0C,$00 ; 3 . . 1 1 2 2 3 2 2 1 1 . . 3 . . . . .
+        .DB      $FD,$AF,$E9,$FC,$00 ; 3 3 3 1 2 2 3 3 3 2 2 1 3 3 3 . . . . .
+        .DB      $C1,$6B,$A5,$0C,$00 ; 3 . . 1 1 2 2 3 2 2 1 1 . . 3 . . . . .
+        .DB      $C0,$5A,$94,$0C,$00 ; 3 . . . 1 1 2 2 2 1 1 . . . 3 . . . . .
+        .DB      $C0,$16,$50,$0C,$00 ; 3 . . . . 1 1 2 1 1 . . . . 3 . . . . .
+        .DB      $C0,$05,$40,$0C,$00 ; 3 . . . . . 1 1 1 . . . . . 3 . . . . .
+        .DB      $00,$01,$00,$00,$00 ; . . . . . . . 1 . . . . . . . . . . . .
+;*******************************************************************************
+; ATTACK_SATELLITE_2
+;
+; Attack-satellite animation, frame 2.
+; Object record: $1E1C; bitmap header: $1E1E.
+; Hotspot offsets: X = 7, Y = 5.
+; Bitmap: 20 x 11 pixels, 5 bytes per row.
+;*******************************************************************************
+ATTACK_SATELLITE_2:
+        .DB      $07,$05 ; Hotspot offsets: X = 7, Y = 5
+ATTACK_SATELLITE_2_HEADER:
+        .DB      $05,$0B ; Bitmap size: 5 bytes/row, 11 rows
+        .DB      $00,$02,$00,$00,$00 ; . . . . . . . 2 . . . . . . . . . . . .
+        .DB      $00,$0A,$80,$00,$00 ; . . . . . . 2 2 2 . . . . . . . . . . .
+        .DB      $C0,$2B,$A0,$0C,$00 ; 3 . . . . 2 2 3 2 2 . . . . 3 . . . . .
+        .DB      $C0,$AF,$E8,$0C,$00 ; 3 . . . 2 2 3 3 3 2 2 . . . 3 . . . . .
+        .DB      $C2,$BD,$FA,$0C,$00 ; 3 . . 2 2 3 3 1 3 3 2 2 . . 3 . . . . .
+        .DB      $FE,$F5,$7E,$FC,$00 ; 3 3 3 2 3 3 1 1 1 3 3 2 3 3 3 . . . . .
+        .DB      $C2,$BD,$FA,$0C,$00 ; 3 . . 2 2 3 3 1 3 3 2 2 . . 3 . . . . .
+        .DB      $C0,$AF,$E8,$0C,$00 ; 3 . . . 2 2 3 3 3 2 2 . . . 3 . . . . .
+        .DB      $C0,$2B,$A0,$0C,$00 ; 3 . . . . 2 2 3 2 2 . . . . 3 . . . . .
+        .DB      $00,$0A,$80,$00,$00 ; . . . . . . 2 2 2 . . . . . . . . . . .
+        .DB      $00,$02,$00,$00,$00 ; . . . . . . . 2 . . . . . . . . . . . .
+;*******************************************************************************
+; ATTACK_SATELLITE_3
+;
+; Attack-satellite animation, frame 3.
+; Object record: $1E57; bitmap header: $1E59.
+; Hotspot offsets: X = 7, Y = 5.
+; Bitmap: 20 x 11 pixels, 5 bytes per row.
+;*******************************************************************************
+ATTACK_SATELLITE_3:
+        .DB      $07,$05 ; Hotspot offsets: X = 7, Y = 5
+ATTACK_SATELLITE_3_HEADER:
+        .DB      $05,$0B ; Bitmap size: 5 bytes/row, 11 rows
+        .DB      $00,$03,$00,$00,$00 ; . . . . . . . 3 . . . . . . . . . . . .
+        .DB      $00,$0F,$C0,$00,$00 ; . . . . . . 3 3 3 . . . . . . . . . . .
+        .DB      $00,$3D,$F0,$00,$00 ; . . . . . 3 3 1 3 3 . . . . . . . . . .
+        .DB      $00,$F5,$7C,$00,$00 ; . . . . 3 3 1 1 1 3 3 . . . . . . . . .
+        .DB      $C3,$D6,$5F,$0C,$00 ; 3 . . 3 3 1 1 2 1 1 3 3 . . 3 . . . . .
+        .DB      $FF,$5A,$97,$FC,$00 ; 3 3 3 3 1 1 2 2 2 1 1 3 3 3 3 . . . . .
+        .DB      $C3,$D6,$5F,$0C,$00 ; 3 . . 3 3 1 1 2 1 1 3 3 . . 3 . . . . .
+        .DB      $00,$F5,$7C,$00,$00 ; . . . . 3 3 1 1 1 3 3 . . . . . . . . .
+        .DB      $00,$3D,$F0,$00,$00 ; . . . . . 3 3 1 3 3 . . . . . . . . . .
+        .DB      $00,$0F,$C0,$00,$00 ; . . . . . . 3 3 3 . . . . . . . . . . .
+        .DB      $00,$03,$00,$00,$00 ; . . . . . . . 3 . . . . . . . . . . . .
+; Attack-satellite animation sequence.
+ATTACK_SATELLITE_SEQUENCE:
+        .DB      $04
+        .DW      ATTACK_SATELLITE_1
+        .DB      $04
+        .DW      ATTACK_SATELLITE_2
+        .DB      $04
+        .DW      ATTACK_SATELLITE_3
+        .DB      $04
+        .DW      ATTACK_SATELLITE_2
+        .DB      $00
+        .DW      ATTACK_SATELLITE_SEQUENCE
+        push de
 	 ld   de,$0024
 	 add  hl,de
 	 pop  de
@@ -6002,24 +5076,22 @@
 	 ld   b,$FD
 	 sla  h
 	 sbc  a,$C9
-	 ld   (bc),a
-	 add  a,(hl)
-	 rla
-	 inc  bc
-	 xor  (hl)
-	 ld   d,$03
-	 call po,$0316
-	 ld   a,(de)
-	 rla
-	 inc  b
-	 ld   d,b
-	 rla
-	 rst  $38
-	 add  a,(hl)
-	 rla
-	 nop
-	 adc  a,e
-	 rla
+; Alternate alien-ship destruction sequence used by the gameplay script.
+ALIEN_SHIP_DESTROY_SEQUENCE_ALT:
+        .DB      $02
+        .DW      BLANK
+        .DB      $03
+        .DW      ALIEN_SHIP_DESTROY_1
+        .DB      $03
+        .DW      ALIEN_SHIP_DESTROY_2
+        .DB      $03
+        .DW      ALIEN_SHIP_DESTROY_3
+        .DB      $04
+        .DW      ALIEN_SHIP_DESTROY_4
+        .DB      $FF
+        .DW      BLANK
+        .DB      $00
+        .DW      ALIEN_SHIP_DESTROY_SEQUENCE
 	 ld   hl,($D098)
 	 ld   de,$001C
 	 add  hl,de
@@ -7829,6 +6901,11 @@
 	 ld   (hl),e
 	 ld   d,b
 	 dec  de
+; The threaded base-render script embeds object-record pointers at these
+; locations:
+;   $2E29, $2E49  LASER_BASE_BODY_DESTROY
+;   $2E39, $2EC6  LASER_BASE_BODY
+;   $2E78, $2EA2  LASER_BASE_DESTROY_3
 	 ld   e,(hl)
 	 jr   $2DC1
 	 and  l
@@ -8017,6 +7094,8 @@
 	 rla
 	 ld   c,$10
 	 jr   $2F27
+; The threaded alien-render script selects ALIEN_SHIP_HORIZONTAL at $2F0C and
+; $2F31, and ALIEN_SHIP_VERTICAL at $2F1E and $2F40.
 	 cp   c
 	 rla
 	 ld   a,(de)
